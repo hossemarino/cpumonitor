@@ -1,0 +1,126 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD>
+<meta name="GENERATOR" content="CCM">
+<!-- Table of contents -->
+</HEAD>
+<BODY>
+<OBJECT type="text/site properties">
+  <param name="Window Styles" value="0x800025">
+  <param name="ImageType" value="Folder">
+</OBJECT>
+<UL>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Home">
+      <param name="Local" value="index.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="CCM overview">
+    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Metrics reference">
+          <param name="Local" value="metrics.html">
+        </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Troubleshooting">
+          <param name="Local" value="troubleshooting.html">
+        </OBJECT>
+    </UL>
+
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="CPU monitoring">
+    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="CPU nuts & bolts">
+          <param name="Local" value="cpu_nuts_and_bolts.html">
+        </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="QLen (Processor Queue Length)">
+          <param name="Local" value="qlen.html">
+        </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="ETW kernel tracing">
+          <param name="Local" value="etw.html">
+        </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="ETW deep dive">
+          <param name="Local" value="etw_deep.html">
+        </OBJECT>
+    </UL>
+
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Memory & storage">
+    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Memory & disks (overview)">
+          <param name="Local" value="memory_and_disks.html">
+        </OBJECT>
+    </UL>
+
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Processes">
+    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Process table (detailed view)">
+          <param name="Local" value="processes.html">
+        </OBJECT>
+    </UL>
+
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="CPU instruction set (ISA)">
+    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Instruction set (ISA)">
+          <param name="Local" value="isa.html">
+        </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="SSE / AVX deep dive">
+          <param name="Local" value="isa_sse_avx_deep.html">
+        </OBJECT>
+    </UL>
+
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Power, temperature, and sensors">
+    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Power & temperature">
+          <param name="Local" value="power_and_temps.html">
+        </OBJECT>
+    </UL>
+
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="GPU & motherboard">
+    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="GPU & motherboard monitoring">
+          <param name="Local" value="gpu_and_motherboard.html">
+        </OBJECT>
+    </UL>
+
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Drivers, privileges, and safety (future expansion)">
+    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Drivers & privileges">
+          <param name="Local" value="drivers_and_privileges.html">
+        </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Driver-mode roadmap (AMD-first)">
+          <param name="Local" value="driver_mode_roadmap_amd.html">
+        </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+          <param name="Name" value="Driver threat model (future expansion)">
+          <param name="Local" value="driver_threat_model.html">
+        </OBJECT>
+    </UL>
+</UL>
+</BODY>
+</HTML>

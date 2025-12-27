@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – ISA</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Instruction set (ISA) reference</h1>
+        <div class="small"><a href="index.html">Back to contents</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#flags">What these flags represent</a></li>
+            <li><a href="#notes">Notes and practical implications</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            ISA, instruction set, CPUID, SIMD, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AVX, AVX2, FMA, BMI1, BMI2, XSAVE, OS support
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="flags">What these flags represent</h2>
+        <div class="small">
+            CCM lists CPU capability flags derived from CPUID. These are “the CPU can execute these opcodes”.
+            Whether your software <i>actually uses</i> them depends on how it was compiled and whether it does runtime dispatch.
+        </div>
+        <table>
+            <tr>
+                <th>Flag</th>
+                <th>Meaning (high-level)</th>
+            </tr>
+            <tr>
+                <td class="code">SSE</td>
+                <td>First generation Streaming SIMD Extensions (vector operations).</td>
+            </tr>
+            <tr>
+                <td class="code">SSE2</td>
+                <td>Extends SSE with more integer and double-precision support; widely required by modern software.</td>
+            </tr>
+            <tr>
+                <td class="code">SSE3</td>
+                <td>Incremental SIMD extensions (new horizontal ops, etc.).</td>
+            </tr>
+            <tr>
+                <td class="code">SSSE3</td>
+                <td>Supplemental SSE3; adds common shuffle/byte operations.</td>
+            </tr>
+            <tr>
+                <td class="code">SSE4.1</td>
+                <td>More integer/vector ops (blend, dot product, etc.).</td>
+            </tr>
+            <tr>
+                <td class="code">SSE4.2</td>
+                <td>String/CRC-related ops and other additions.</td>
+            </tr>
+            <tr>
+                <td class="code">AVX</td>
+                <td>Advanced Vector Extensions (256-bit SIMD registers/instructions). Requires OS support to
+                    save/restore extended state.</td>
+            </tr>
+            <tr>
+                <td class="code">AVX2</td>
+                <td>Extends AVX with 256-bit integer operations.</td>
+            </tr>
+            <tr>
+                <td class="code">FMA</td>
+                <td>Fused multiply-add (a*b+c in one instruction). Often paired with AVX.</td>
+            </tr>
+            <tr>
+                <td class="code">BMI1</td>
+                <td>Bit Manipulation Instructions set 1 (bit scanning/extraction helpers).</td>
+            </tr>
+            <tr>
+                <td class="code">BMI2</td>
+                <td>Bit Manipulation Instructions set 2 (e.g., PDEP/PEXT for bit deposit/extract).</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 id="notes">Notes</h2>
+        <ul>
+            <li>These are capability flags (CPUID). Whether an app uses them depends on the compiler, runtime dispatch,
+                and OS support.</li>
+            <li>For AVX/AVX2, the OS must enable XSAVE/XRESTORE support; this app checks OS support when detecting AVX.
+            </li>
+            <li>ISA features matter beyond pure performance: wider SIMD state can increase context-switch overhead and some instruction mixes can influence turbo/frequency behavior.</li>
+        </ul>
+        <div class="small">
+            A common pattern in performance libraries is: detect CPU features at startup (CPUID), then select the best implementation (scalar → SSE2 → AVX2, etc.).
+            This is why you might see different performance on the same CPU depending on the exact build of an application.
+        </div>
+        <div class="small">For a deep hardware + OS perspective, see <a href="isa_sse_avx_deep.html">SSE / AVX deep dive</a>.</div>
+    </div>
+</body>
+
+</html>

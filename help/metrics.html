@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – Metrics</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Metrics reference</h1>
+        <div class="small"><a href="index.html">Back to contents</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#tabs">Tabs</a></li>
+            <li><a href="#cpu-static">CPU static info</a></li>
+            <li><a href="#pdh">Live counters (PDH)</a></li>
+            <li><a href="#gpu">GPU tab (DXGI + PDH)</a></li>
+            <li><a href="#power-api">Live counters (Power API)</a></li>
+            <li><a href="#wmi">Sensors (WMI)</a></li>
+            <li><a href="#etw">ETW summary</a></li>
+            <li><a href="#process-table">Process table</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            metrics, reference, tabs, GPU tab, DirectX, DXGI, WDDM, GPU Engine, GPU Adapter Memory, VRAM,
+            PDH, perfmon, counters, CPU usage, context switches, interrupts, DPC, QLen, power, temperature, WMI, ETW, process table
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="tabs">Tabs</h2>
+        <p>
+            CCM has three top-level views:
+        </p>
+        <ul>
+            <li><b>CPU</b>: the default view (CPU header + history graph + per-core bars + process table).</li>
+            <li><b>Memory</b>: memory/storage view (RAM + commit + disk graphs) while keeping the same process table.</li>
+            <li><b>GPU</b>: GPU view (GPU header + GPU memory graphs + per-engine utilization graphs) while keeping the same process table.</li>
+        </ul>
+
+        <h3>Memory tab</h3>
+        <ul>
+            <li><b>RAM used (history)</b>: percentage of physical RAM currently in use (derived from <span class="code">GlobalMemoryStatusEx</span>).</li>
+            <li><b>Commit used (history)</b>: commit charge vs commit limit (derived from <span class="code">GetPerformanceInfo</span>).</li>
+            <li><b>Disks (history)</b>: best-effort per-disk read/write MB/s (from PDH <span class="code">PhysicalDisk</span> instances). If per-disk counters aren’t available, CCM falls back to a total series.</li>
+        </ul>
+        <div class="small">
+            For background and interpretation notes, see <a href="memory_and_disks.html">Memory &amp; disks (overview)</a>.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="gpu">GPU tab (DXGI + PDH)</h2>
+        <div class="small">
+            CCM’s GPU tab is intentionally “OS-first”. It reads GPU identity and memory sizes using <b>DXGI</b> and reads utilization/memory usage using
+            <b>PDH</b> performance counters (<span class="code">GPU Engine</span> and <span class="code">GPU Adapter Memory</span>).
+        </div>
+
+        <h3>GPU header fields (identity)</h3>
+        <table>
+            <tr><th>Field</th><th>Meaning</th><th>Source</th></tr>
+            <tr>
+                <td class="code">Adapter name</td>
+                <td>Marketing/device name string as reported by the graphics stack.</td>
+                <td>DXGI adapter descriptor</td>
+            </tr>
+            <tr>
+                <td class="code">Vendor ID</td>
+                <td>PCI vendor ID (e.g. 0x10DE NVIDIA, 0x1002 AMD, 0x8086 Intel).</td>
+                <td>DXGI adapter descriptor</td>
+            </tr>
+            <tr>
+                <td class="code">Dedicated / Shared totals</td>
+                <td>
+                    Dedicated is on-board VRAM (dGPU) or reserved graphics memory; shared is system memory that can be used by the GPU.
+                </td>
+                <td>DXGI adapter descriptor</td>
+            </tr>
+        </table>
+
+        <h3>GPU memory graphs</h3>
+        <table>
+            <tr><th>Graph</th><th>Meaning</th><th>Source</th></tr>
+            <tr>
+                <td class="code">Dedicated used (MB)</td>
+                <td>Best-effort “dedicated GPU memory currently in use” for the selected adapter.</td>
+                <td>PDH <span class="code">GPU Adapter Memory</span> → <span class="code">Dedicated Usage</span></td>
+            </tr>
+            <tr>
+                <td class="code">Shared used (MB)</td>
+                <td>Best-effort “shared GPU memory currently in use” for the selected adapter.</td>
+                <td>PDH <span class="code">GPU Adapter Memory</span> → <span class="code">Shared Usage</span></td>
+            </tr>
+        </table>
+        <div class="small">
+            CCM also reads <span class="code">Dedicated Limit</span> and <span class="code">Shared Limit</span> (when available) to scale/label usage.
+            Interpreting VRAM on iGPUs is tricky: “shared” is system RAM and can look large.
+        </div>
+
+        <h3>GPU engine utilization graphs</h3>
+        <ul>
+            <li><b>What it is:</b> engine “busy time” over the sampling window, expressed as percent.</li>
+            <li><b>What’s graphed:</b> CCM aggregates multiple per-process/per-context counters into a single series per engine type (e.g. <span class="code">3D</span>, <span class="code">Copy</span>, <span class="code">Compute_0</span>, <span class="code">VideoDecode</span>).</li>
+            <li><b>Why it can differ from Task Manager:</b> Task Manager may show a different selection/aggregation of engines and may display additional fields that are not exposed through stable public APIs.</li>
+        </ul>
+
+        <h3>What CCM does not read in the main EXE</h3>
+        <ul>
+            <li><b>GPU temperatures / hotspot / memory junction</b> (vendor-ish).</li>
+            <li><b>Power (W), voltage, current</b> (vendor-ish).</li>
+            <li><b>Fan RPM / fan control</b> (vendor-ish; also a safety surface).</li>
+            <li><b>PCIe link rate/width and deep board telemetry</b> (often requires privileged access or vendor tooling).</li>
+        </ul>
+        <div class="small">
+            CCM’s intended model: keep the UI safe and driver-free by default, and optionally ingest richer telemetry via an external provider.
+            See <a href="gpu_and_motherboard.html">GPU &amp; motherboard monitoring</a>.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="cpu-static">CPU static info</h2>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Meaning</th>
+            </tr>
+            <tr>
+                <td class="code">Vendor / Brand</td>
+                <td>CPUID vendor string and brand string.</td>
+            </tr>
+            <tr>
+                <td class="code">Family / Model / Stepping</td>
+                <td>CPUID identification fields for the processor revision.</td>
+            </tr>
+            <tr>
+                <td class="code">Topology</td>
+                <td>Packages/cores/logical processors from <span class="code">GetLogicalProcessorInformationEx</span>.
+                </td>
+            </tr>
+            <tr>
+                <td class="code">Cache</td>
+                <td>Best-effort cache sizes from Windows topology APIs.</td>
+            </tr>
+            <tr>
+                <td class="code">TSC GHz</td>
+                <td>Best-effort TSC frequency estimate using <span class="code">RDTSC</span> vs <span
+                        class="code">QPC</span> over ~200ms.</td>
+            </tr>
+            <tr>
+                <td class="code">Up</td>
+                <td>System uptime (time since boot) from <span class="code">GetTickCount64</span>, formatted as <span class="code">d hh:mm:ss</span>.</td>
+            </tr>
+        </table>
+
+        <h3>Where do you see Topology on the screen?</h3>
+        <ul>
+            <li><b>Header (top of the window):</b> shows <span class="code">packages</span>, <span class="code">cores</span>, <span class="code">logical</span> (logical processors / threads) and <span class="code">Up</span> (uptime).</li>
+            <li><b>Header (top of the window):</b> shows a cache summary line (<span class="code">L1/L2/L3</span>) derived from the same Windows topology APIs.</li>
+            <li><b>CPU0–CPU15 bars:</b> those are per-logical-processor utilization bars (not per physical core). They give a quick “thread-level” view.</li>
+        </ul>
+
+        <h3>What is <span class="code">GetLogicalProcessorInformationEx</span>?</h3>
+        <div class="small">
+            Windows exposes CPU topology through <span class="code">GetLogicalProcessorInformationEx</span>. CCM uses it to count:
+            (1) CPU packages (sockets), (2) physical cores, and (3) logical processors (SMT threads like Intel Hyper‑Threading).
+            It also uses it to read cache descriptors (levels, sizes, and sharing).
+        </div>
+        <div class="small">
+            Important: topology is mostly <b>static</b>. CCM is not “monitoring topology changing over time” (except hotplug scenarios);
+            it’s describing how Windows currently sees the machine.
+        </div>
+
+        <h3>TSC GHz, RDTSC, and QPC (plain English)</h3>
+        <ul>
+            <li><b>TSC</b> (Time Stamp Counter) is a hardware counter inside the CPU. It increments at some rate.</li>
+            <li><b>RDTSC</b> is the CPU instruction that reads the TSC value.</li>
+            <li><b>QPC</b> (<span class="code">QueryPerformanceCounter</span>) is the Windows high-resolution timer API. Internally it may use TSC or another hardware clock, depending on your system.</li>
+            <li><b>CCM’s TSC GHz</b> is computed by measuring how much the TSC changed over a short window while also measuring time with QPC, then estimating the TSC rate.</li>
+        </ul>
+
+        <h3>What does “best-effort” mean in CCM?</h3>
+        <ul>
+            <li><b>It means “use the safest standard API first”.</b> If Windows exposes it reliably, CCM reads it. If not, CCM shows <span class="code">N/A</span> or 0 and keeps running.</li>
+            <li><b>It also means “don’t pretend missing data is real”.</b> Some values require firmware support, driver support, or privileges; on many PCs they simply aren’t available in user mode.</li>
+            <li><b>It can mean “approximate”.</b> For example, frequency/power/temperature can be virtualized, filtered, or reported with limited resolution. Under virtualization it can be especially misleading.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="pdh">Live counters (PDH)</h2>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Meaning</th>
+            </tr>
+            <tr>
+                <td class="code">Usage</td>
+                <td>Total CPU utilization from <span class="code">% Processor Time</span>.</td>
+            </tr>
+            <tr>
+                <td class="code">Ctx/s</td>
+                <td><span class="code">\System\Context Switches/sec</span>.</td>
+            </tr>
+            <tr>
+                <td class="code">IRQ/s</td>
+                <td><span class="code">\Processor(_Total)\Interrupts/sec</span> (PDH counter).</td>
+            </tr>
+            <tr>
+                <td class="code">DPC/s</td>
+                <td>Best-effort PDH counter (availability varies by OS).</td>
+            </tr>
+            <tr>
+                <td class="code">QLen</td>
+                <td><span class="code">\System\Processor Queue Length</span>. See <a href="qlen.html">QLen explained</a> for interpretation and caveats.</td>
+            </tr>
+            <tr>
+                <td class="code">Pwr (W)</td>
+                <td>Optional <span class="code">\Power Meter(_Total)\Power</span> if exposed. Many systems report 0.0W or don’t expose this counter at all; see <a href="power_and_temps.html">Power &amp; temperature</a>.</td>
+            </tr>
+        </table>
+        <div class="small">
+            Note: PDH rate counters typically require two samples. The app runs continuously and updates rates each sample tick.
+        </div>
+
+        <h3>What is PDH?</h3>
+        <div class="small">
+            <b>PDH</b> (Performance Data Helper) is the Windows API for reading performance counters (the same counter system used by
+            Performance Monitor / “perfmon”). Counters are identified by paths like <span class="code">\System\Context Switches/sec</span>.
+        </div>
+        <ul>
+            <li><b>Why two samples?</b> Many counters are rates (per-second). PDH computes the rate from the difference between two samples taken at different times.</li>
+            <li><b>Why can a counter be missing?</b> The counter might not exist on your Windows version, might be disabled, or might be provided only by specific hardware/firmware.</li>
+            <li><b>Why can the value be 0?</b> Sometimes it’s genuinely zero; other times it means “provider exists but reports 0” (common for platform power meters).</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="power-api">Live counters (Power API)</h2>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Meaning</th>
+            </tr>
+            <tr>
+                <td class="code">Per-core MHz</td>
+                <td>From <span class="code">CallNtPowerInformation(ProcessorInformation)</span> (best-effort).</td>
+            </tr>
+            <tr>
+                <td class="code">Fchg/s</td>
+                <td>Counts how many cores changed their reported MHz between samples; divided by dt.</td>
+            </tr>
+            <tr>
+                <td class="code">Thr%</td>
+                <td>Heuristic estimate: percent of cores running below 95% of their max MHz.</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 id="wmi">Sensors (WMI, best-effort)</h2>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Meaning</th>
+            </tr>
+            <tr>
+                <td class="code">Temp</td>
+                <td><span class="code">MSAcpi_ThermalZoneTemperature</span> (often not CPU package temp; frequently unavailable). See <a href="power_and_temps.html">Power &amp; temperature</a>.</td>
+            </tr>
+            <tr>
+                <td class="code">Fan RPM</td>
+                <td><span class="code">Win32_Fan</span> (rarely populated on consumer systems).</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 id="etw">ETW summary (Kernel tracing)</h2>
+        <div class="small">
+            The header includes an <span class="code">ETW ...</span> segment. This is derived from a real-time kernel
+            logger session.
+            Details and caveats are in <a href="etw.html">ETW notes</a> and <a href="etw_deep.html">ETW deep dive</a>.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="process-table">Process table</h2>
+        <ul>
+            <li>The bottom pane shows a best-effort process list (PID, CPU%, memory, owner, network endpoint for established IPv4 TCP connections, name, path).</li>
+            <li><b>Sorting:</b> click the column header to sort; click again to toggle ascending/descending.</li>
+            <li><b>Scrolling:</b> use the mouse wheel to scroll through rows.</li>
+            <li><b>Actions:</b> right-click a selected row for <span class="code">Copy</span>, <span class="code">Copy all visible rows</span>, <span class="code">Copy all rows</span>, <span class="code">Copy PID only</span>, <span class="code">Copy Path only</span>, <span class="code">Open file location</span>, <span class="code">End Task</span> (WM_CLOSE best-effort), or <span class="code">Kill Process</span> (TerminateProcess).</li>
+            <li><b>Copy shortcut:</b> select a row and press <span class="code">Ctrl+C</span> to copy a tab-delimited header + row.</li>
+        </ul>
+        <div class="small">Some items are disabled if PID/Path is unavailable; protected processes may hide details depending on permissions.</div>
+    </div>
+</body>
+
+</html>

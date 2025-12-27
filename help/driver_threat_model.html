@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Driver threat model (future expansion)</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Driver threat model (future expansion)</h1>
+        <div class="small"><a href="index.html">Back to contents</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#goals">Security goals</a></li>
+            <li><a href="#boundaries">Trust boundaries</a></li>
+            <li><a href="#ioctl">IOCTL design rules</a></li>
+            <li><a href="#amd">AMD-first notes</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            threat model, driver security, IOCTL, allow-list, least privilege, LocalSystem service, read-only telemetry, attack surface, DoS resistance
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="status">Status</h2>
+        <ul>
+            <li><b>CCM ships driver-free.</b> This page documents safety rules if a kernel driver is ever added later.</li>
+            <li><b>Driver work is optional and out-of-scope</b> for the current “small project” direction.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="goals">Security goals</h2>
+        <ul>
+            <li><b>No dangerous primitives</b> exposed to user mode.</li>
+            <li><b>Read-only telemetry</b>: no fan control, no voltage writes, no OC, no firmware changes.</li>
+            <li><b>Fail closed</b>: if the request is not explicitly allowed, reject it.</li>
+            <li><b>Small attack surface</b>: minimal IOCTL set; fixed-size structs; minimal parsing.</li>
+            <li><b>Least privilege</b>: a LocalSystem broker/service talks to the driver; the UI should not.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="boundaries">Trust boundaries</h2>
+        <ul>
+            <li><b>CCM UI (user-mode)</b>: untrusted input surface.</li>
+            <li><b>Provider/service (user-mode, LocalSystem)</b>: mediates requests, applies caching/rate limits.</li>
+            <li><b>Kernel driver (KMDF)</b>: highest privilege; must stay tiny and heavily audited.</li>
+        </ul>
+        <div class="small">Rule: the UI should never open the driver device directly.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="ioctl">IOCTL design rules (non-negotiable)</h2>
+        <table>
+            <tr>
+                <th>Rule</th>
+                <th>What it means</th>
+            </tr>
+            <tr>
+                <td><b>Read-only only</b></td>
+                <td>No write IOCTLs. Prefer <span class="code">METHOD_BUFFERED</span> with fixed-size output structs.</td>
+            </tr>
+            <tr>
+                <td><b>Fixed-size, versioned structs</b></td>
+                <td>Version/ABI handshake + capability bitmap. Fully initialize all outputs.</td>
+            </tr>
+            <tr>
+                <td><b>Allow-lists everywhere</b></td>
+                <td>If an IOCTL references an MSR index / PCI BDF / EC address, validate against a hardcoded allow-list.</td>
+            </tr>
+            <tr>
+                <td><b>No arbitrary reads</b></td>
+                <td>No physical memory reads, no arbitrary MMIO, no “read address X”.</td>
+            </tr>
+            <tr>
+                <td><b>No writes</b></td>
+                <td>No MSR writes, no I/O port writes, no EC writes. Do not expose power/thermal control.</td>
+            </tr>
+            <tr>
+                <td><b>Strict buffer validation</b></td>
+                <td>Validate buffer sizes before writing; reject unknown IOCTLs; never leak kernel pointers.</td>
+            </tr>
+            <tr>
+                <td><b>DoS resistance</b></td>
+                <td>Rate-limit and cache in the service; avoid long blocking hardware reads in the driver.</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 id="amd">AMD-first notes</h2>
+        <ul>
+            <li>On many modern AMD systems, many “real sensors” are firmware/platform mediated and vary by motherboard.</li>
+            <li>MSRs are useful for certain counters/time/frequency, but are not a universal “sensor API”.</li>
+        </ul>
+    </div>
+</body>
+
+</html>

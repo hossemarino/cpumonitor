@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – Power & temperature</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Power & temperature (why these are hard on Windows)</h1>
+        <div class="small"><a href="index.html">Back to contents</a> · <a href="metrics.html">Metrics</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#pwr">Why power can be 0 / N/A</a></li>
+            <li><a href="#temp">Why temperature can be N/A</a></li>
+            <li><a href="#full">What you need for the full picture</a></li>
+            <li><a href="#direction">Practical direction</a></li>
+            <li><a href="#provider">Pluggable provider interface</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            power, watts, temperature, sensors, WMI, MSAcpi_ThermalZoneTemperature, PDH, Power Meter, fan RPM, EC, SMBus, provider, named pipe
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="pwr">Why “Pwr (W)” can read 0.0 W or N/A</h2>
+        <ul>
+            <li>This app uses an <b>optional</b> PDH counter: <span class="code">\Power Meter(_Total)\Power</span>.</li>
+            <li>On many desktops/laptops, there is no system-wide “power meter” provider exposed via PDH, so the counter may not exist or may return 0.</li>
+            <li>Even when present, it might represent platform power, not CPU package power (semantics depend on the provider/firmware).</li>
+        </ul>
+        <div class="small">Accurate real-time CPU package power generally requires access to vendor telemetry (e.g., RAPL on Intel) which is not universally exposed through a stable, permission-friendly Windows API.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="temp">Why “Temp” can read N/A</h2>
+        <ul>
+            <li>This app reads <span class="code">MSAcpi_ThermalZoneTemperature</span> from WMI (<span class="code">ROOT\\WMI</span>).</li>
+            <li>On many systems, this class is either missing, returns only chassis/board “thermal zone” sensors, or returns values that are not CPU package temperature.</li>
+            <li>Modern CPU temperature sensors are typically behind vendor-specific interfaces (Intel/AMD) and often require a kernel driver or vendor service to access reliably.</li>
+        </ul>
+        <div class="small">So “N/A” is expected on a lot of consumer machines — it means “no reliable sensor surfaced via this WMI route”.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="full">What you need for the “full picture”</h2>
+        <table>
+            <tr><th>Goal</th><th>Usually requires</th><th>Why</th></tr>
+            <tr>
+                <td>CPU package temperature</td>
+                <td>Vendor-specific telemetry (often via a kernel driver)</td>
+                <td>CPU sensors aren’t standardized as WMI objects; firmware/ACPI rarely expose them as “CPU temp”.</td>
+            </tr>
+            <tr>
+                <td>CPU package power (W)</td>
+                <td>RAPL / energy counters / vendor SDK</td>
+                <td>Real power measurement is hardware-specific and permission-sensitive.</td>
+            </tr>
+            <tr>
+                <td>Fan RPM</td>
+                <td>EC/SMBus access (typically driver-backed)</td>
+                <td>Fans are controlled by embedded controllers; Windows doesn’t provide a universal user-mode API.</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 id="direction">Practical direction for this project</h2>
+        <ul>
+            <li>Keep the current WMI/PDH approach as a <b>safe best-effort baseline</b>.</li>
+            <li>If you want “like HWiNFO”, you typically need a <b>signed kernel-mode driver</b> or to depend on an existing driver/service.</li>
+            <li>A common approach in open-source monitors is to use an existing sensor stack (e.g., LibreHardwareMonitor/OpenHardwareMonitor style) which uses a driver to read MSRs/SMBus/EC.</li>
+        </ul>
+        <div class="small">If you want, we can document (and optionally integrate) a pluggable “sensor provider” interface so user-mode can consume sensor values from a separate service/driver without baking the whole driver into this repo.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="provider">Pluggable “sensor provider” interface (fully explained)</h2>
+        <div class="small">
+            Goal: keep CCM as a normal user-mode GUI, but allow “better sensors” to be supplied by something else.
+            That “something else” can be a separate user-mode service, a vendor SDK wrapper, or (optionally) a driver-backed service.
+        </div>
+
+        <h3>Why a provider layer helps</h3>
+        <ul>
+            <li><b>Safety:</b> CCM stays driver-free. Any risky hardware access lives outside the UI.</li>
+            <li><b>Portability:</b> you can swap providers per machine (desktop vs laptop vs VM).</li>
+            <li><b>Auditing:</b> a small provider protocol is easier to review than embedding many sensor hacks into CCM.</li>
+            <li><b>Least privilege:</b> CCM can run unelevated while a provider (if needed) runs elevated.</li>
+        </ul>
+
+        <h3>What CCM would ask a provider for (minimal, useful set)</h3>
+        <div class="small">Keep it small at first. You can always add more later.</div>
+        <table>
+            <tr><th>Metric</th><th>Units</th><th>Notes</th></tr>
+            <tr><td>CPU temperature</td><td>°C</td><td>Prefer “CPU package” if possible; otherwise clearly label what it is.</td></tr>
+            <tr><td>CPU/package power</td><td>W</td><td>Clarify whether it is CPU-only or platform power.</td></tr>
+            <tr><td>Fan speed</td><td>RPM</td><td>May be multiple fans; start with one “primary” fan.</td></tr>
+            <tr><td>Provider status</td><td>text</td><td>Human-friendly reason when data is unavailable.</td></tr>
+        </table>
+
+                <h3>Data model (what CCM supports right now)</h3>
+                <div class="small">
+                        To keep integration simple and beginner-friendly, CCM currently supports a tiny text protocol over a local named pipe.
+                        It’s request/response and uses <span class="code">key=value</span> lines.
+                </div>
+                <ul>
+                        <li>Pipe: <span class="code">\\.\pipe\ccm_sensors</span></li>
+                        <li>Request: <span class="code">GET</span> (followed by newline)</li>
+                        <li>Response: newline-separated lines, e.g. <span class="code">tempC=62.5</span>, <span class="code">powerW=38.2</span>, <span class="code">fanRpm=1450</span></li>
+                    <li>Providers may also include <span class="code">status=OK</span> to indicate a successful round-trip even if no sensor keys are available.</li>
+                        <li>Missing keys mean “not available”. Unknown keys are ignored.</li>
+                </ul>
+
+                <div class="small">A demo provider is included in this repo:</div>
+                <p>
+                    Newer builds ship a bundled provider executable and CCM will try to auto-start it when no provider is running.
+                    This makes the external-provider model feel “built in” while still keeping CCM driver-free.
+                </p>
+                <pre class="code">.\CCM_sensor_provider.exe</pre>
+                <div class="small">When present next to <span class="code">CCM.exe</span>, CCM starts it on demand and it exits when CCM exits.</div>
+                <p>
+                    Alternative (manual sample provider):
+                </p>
+                <pre class="code">pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\ccm_sensor_provider_sample.ps1 -TempC 55.0 -PowerW 22.5 -FanRpm 1200</pre>
+
+        <h3>Transport options (how CCM talks to the provider)</h3>
+        <table>
+            <tr><th>Transport</th><th>Pros</th><th>Cons</th></tr>
+            <tr>
+                <td><b>Named pipe</b></td>
+                <td>Local-only, fast, easy ACLs, good Windows fit. <b>CCM uses this today.</b></td>
+                <td>Needs careful protocol framing and timeouts.</td>
+            </tr>
+            <tr>
+                <td><b>Local TCP/HTTP</b></td>
+                <td>Easy debugging; works with many languages.</td>
+                <td>Must secure it (bind localhost + auth); firewall confusion.</td>
+            </tr>
+            <tr>
+                <td><b>Shared memory + event</b></td>
+                <td>Very fast; provider can publish at high frequency.</td>
+                <td>More complexity (lifetime, synchronization, versioning).</td>
+            </tr>
+        </table>
+
+        <h3>Security model (don’t skip this)</h3>
+        <ul>
+            <li><b>Local only:</b> the provider should only accept local connections.</li>
+            <li><b>Access control:</b> if the provider runs elevated, lock its endpoint to Administrators/System.</li>
+            <li><b>No “write” commands:</b> start with read-only telemetry. Avoid fan control/overclocking controls entirely.</li>
+            <li><b>Input validation:</b> treat the UI as untrusted from the provider’s perspective (even if you wrote both).</li>
+            <li><b>Timeouts:</b> CCM should fail fast (e.g., 50–200ms) and show <span class="code">N/A (provider)</span>, not freeze the UI.</li>
+        </ul>
+
+        <h3>Versioning and compatibility</h3>
+        <ul>
+            <li><b>Protocol version:</b> include <span class="code">version</span> in every response.</li>
+            <li><b>Forward compatibility:</b> CCM should ignore unknown fields.</li>
+            <li><b>Backward compatibility:</b> provider should keep old fields stable for a while.</li>
+            <li><b>Status string:</b> always include a human-readable <span class="code">detail</span> for debugging.</li>
+        </ul>
+
+        <h3>How CCM would integrate (planned approach)</h3>
+        <ul>
+            <li><b>Step 1:</b> define a small interface inside CCM: <span class="code">TryReadCpuTempC</span>, <span class="code">TryReadFanRpm</span>, <span class="code">TryReadPowerW</span>.</li>
+            <li><b>Step 2:</b> keep built-ins as providers too: WMI and PDH power meter are “providers”.</li>
+            <li><b>Step 3:</b> add an optional external provider. CCM tries providers in order and uses the first one that returns a valid value.</li>
+            <li><b>Step 4:</b> surface provenance in the UI text: e.g. <span class="code">Temp: 62.5 C (provider)</span> or <span class="code">Temp: N/A (WMI)</span>.</li>
+        </ul>
+
+        <h3>What the provider might be, in practice</h3>
+        <ul>
+            <li>A small <b>Windows service</b> that reads vendor APIs and publishes numbers.</li>
+            <li>A wrapper over an existing open-source sensor stack that already solved the hard hardware access.</li>
+            <li>A driver-backed helper service (only if you accept the complexity of driver signing and kernel risk).</li>
+        </ul>
+        <div class="small">This split (UI ↔ provider) is how you get “HWiNFO-like” sensors without turning the UI repo into a driver repo.</div>
+    </div>
+
+</body>
+
+</html>

@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – Drivers & privileges</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Drivers &amp; privileges (why “kernel mode” exists)</h1>
+        <div class="small"><a href="index.html">Back to contents</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#user-vs-kernel">User mode vs kernel mode</a></li>
+            <li><a href="#no-driver">What CCM uses (no driver)</a></li>
+            <li><a href="#matrix">Capability matrix</a></li>
+            <li><a href="#why-hard">Why telemetry is hard</a></li>
+            <li><a href="#what-is-driver">What a driver is</a></li>
+            <li><a href="#signing">Why drivers must be signed</a></li>
+            <li><a href="#read-only">Read-only rules</a></li>
+            <li><a href="#roadmap">Future work roadmap</a></li>
+            <li><a href="#etw">Privileges vs drivers (ETW)</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            user mode, kernel mode, driver, KMDF, IOCTL, code signing, Secure Boot, HVCI, VBS, test signing, attestation, WHQL,
+            GPU, DirectX, DXGI, WDDM, PDH,
+            SeDebugPrivilege, ETW privileges
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="user-vs-kernel">Two worlds: user mode vs kernel mode</h2>
+        <ul>
+            <li><b>User mode</b> is where normal applications run. The OS isolates processes from each other. If an app crashes, it normally only takes itself down.</li>
+            <li><b>Kernel mode</b> is where the Windows kernel and core drivers run. Kernel code can touch hardware directly (or very close to it) and can read/write almost any memory.</li>
+            <li>Windows keeps these separate because kernel bugs are catastrophic: a broken kernel driver can crash the whole machine (BSOD), corrupt memory, or weaken security.</li>
+        </ul>
+        <div class="small">CCM today is a <b>user-mode only</b> app. This page explains why drivers exist and how you would add an optional driver later (without shipping one now).</div>
+    </div>
+
+    <div class="card">
+        <h2 id="no-driver">What CCM uses (no driver)</h2>
+        <ul>
+            <li><b>PDH</b> for CPU usage and system rates.</li>
+            <li><b>PowrProf</b> for per-core frequency (MHz) and a throttling heuristic.</li>
+            <li><b>WMI (best-effort)</b> for temperatures/fans when the system exposes them.</li>
+            <li><b>ETW kernel tracing (best-effort)</b> for scheduler/ISR/DPC rates (when allowed by your system policy/privileges).</li>
+            <li><b>DXGI + PDH (best-effort)</b> for GPU identity, GPU engine utilization, and GPU memory usage (when exposed by your driver/OS).</li>
+        </ul>
+        <div class="small">That’s why CCM can run without installing anything special and without lowering Windows security features.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="matrix">Capability matrix: user mode vs kernel mode</h2>
+        <div class="small">
+            Below is a practical “what can we realistically read?” matrix. Hardware telemetry is messy: some values are
+            exposed cleanly through Windows, some require a vendor SDK, and many require privileged hardware access.
+            CCM’s long-term plan is to keep the UI safe and optionally ingest “driver-mode” values via a separate provider.
+        </div>
+        <div class="small">See also: <a href="driver_mode_roadmap_amd.html">Driver-mode roadmap (AMD-first)</a> (interface-by-interface plan).</div>
+        <table>
+            <tr>
+                <th>Telemetry item</th>
+                <th>User mode (safe)</th>
+                <th>Kernel mode / driver</th>
+                <th>Notes / reality check</th>
+            </tr>
+            <tr>
+                <td><b>CPU utilization, context switches, IRQ/DPC, queue length</b></td>
+                <td>Yes (PDH / ETW)</td>
+                <td>No</td>
+                <td>Already supported. ETW may require admin/privileges but does not require a custom driver.</td>
+            </tr>
+            <tr>
+                <td><b>Per-core MHz / throttling heuristics</b></td>
+                <td>Yes (PowrProf)</td>
+                <td>No</td>
+                <td>Best-effort frequency info; not equivalent to “true hardware clocks” on all systems.</td>
+            </tr>
+            <tr>
+                <td><b>CPU temperature (package / per-core)</b></td>
+                <td>Sometimes (WMI / OEM interfaces)</td>
+                <td>Often</td>
+                <td>WMI thermal zones are frequently not CPU package temp. Accurate package/core temps typically come from vendor/board sensor paths.</td>
+            </tr>
+            <tr>
+                <td><b>Fan RPM (CPU / case fans)</b></td>
+                <td>Rarely (WMI)</td>
+                <td>Often</td>
+                <td>Consumer boards usually expose fans via EC/SMBus/I²C and vendor-specific logic.</td>
+            </tr>
+            <tr>
+                <td><b>VRM telemetry (VRM temperature, current, rails)</b></td>
+                <td>Sometimes (vendor utility / vendor service)</td>
+                <td>Often</td>
+                <td>Highly motherboard-dependent. Sometimes accessible via vendor driver/service; frequently requires privileged bus access.</td>
+            </tr>
+            <tr>
+                <td><b>CPU package power (AMD-first)</b></td>
+                <td>Sometimes (PDH Power Meter, vendor stacks)</td>
+                <td>Often (platform/firmware path; sometimes MSRs)</td>
+                <td>On many AMD systems, package power telemetry is firmware/platform mediated and varies by CPU generation + motherboard. Some systems expose power through Windows counters or OEM interfaces, but coverage varies.</td>
+            </tr>
+            <tr>
+                <td><b>MSR reads (time/frequency/counters, platform-specific)</b></td>
+                <td>No</td>
+                <td>Yes</td>
+                <td>Reading MSRs requires privileged CPU instructions or a kernel broker. CCM should treat this as driver-mode only.</td>
+            </tr>
+            <tr>
+                <td><b>PCI/PCIe configuration space</b></td>
+                <td>Not generally</td>
+                <td>Yes (with care)</td>
+                <td>Windows does not provide a general “read any device config space” API to arbitrary user apps. A driver can, but must be extremely conservative and read-only.</td>
+            </tr>
+            <tr>
+                <td><b>SMBus / I²C / EC (Embedded Controller)</b></td>
+                <td>Not generally</td>
+                <td>Yes (with care)</td>
+                <td>Most board sensors live here. Access is platform-specific and easy to get wrong; this is a major reason monitoring tools ship drivers.</td>
+            </tr>
+            <tr>
+                <td><b>Vendor-specific telemetry “through existing system drivers”</b></td>
+                <td>Sometimes</td>
+                <td>Sometimes</td>
+                <td>
+                    Some vendors expose sensors via a user-mode SDK or a privileged service/driver they already ship.
+                    If a stable public SDK exists, prefer it in user mode. If it is only reachable via undocumented IOCTLs,
+                    treat it as fragile and potentially unsafe (and likely breaks across updates).
+                </td>
+            </tr>
+        </table>
+
+        <div class="small">
+            Important: “kernel mode required” does not mean “impossible in user mode on every machine”. It means:
+            across the wide variety of hardware/firmware, a custom driver is often the only consistent and accurate path.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="why-hard">Why some telemetry is hard (or impossible) from user mode</h2>
+        <ul>
+            <li><b>Hardware sensors are not standardized.</b> Temperatures, fan speeds, VRM telemetry, and power rails are often exposed via vendor-specific interfaces (EC/SMBus/I²C/PCI config/MMIO/ACPI methods).</li>
+            <li><b>Many paths require privileged instructions or protected I/O.</b> Direct I/O port access, privileged MSRs, and certain ACPI/EC interactions are blocked from user mode.</li>
+            <li><b>Security and anti‑cheat hardening.</b> Modern Windows features (Secure Boot, HVCI/VBS, driver blocklists) and third‑party security tools intentionally restrict low-level access.</li>
+            <li><b>Virtualization and firmware mediation.</b> Even if you can read “something”, what you read may be filtered/virtualized and not the raw physical signal.</li>
+        </ul>
+        <div class="small">That’s why tools like HWiNFO ship a kernel driver: to safely broker privileged reads through a controlled interface.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="what-is-driver">What a “kernel driver” is</h2>
+        <ul>
+            <li>A <b>kernel driver</b> is a module loaded by Windows into kernel mode (typically a <span class="code">.sys</span> file).</li>
+            <li>It can access kernel APIs and (depending on the driver’s design) perform privileged hardware access on behalf of a user-mode client.</li>
+            <li>Drivers usually expose an interface to user mode (commonly a device object like <span class="code">\\.\MyDevice</span>) and handle requests via <b>IOCTLs</b> (I/O control codes).</li>
+            <li>A robust telemetry driver behaves like a “probe”: minimal write capability, careful bounds checks, strict validation, and a very small attack surface.</li>
+        </ul>
+        <div class="small">Important: CCM does <b>not</b> ship a driver right now. If you ever add one, keep it tiny and heavily audited.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="signing">Why a driver must be signed (and what “signed” means)</h2>
+        <ul>
+            <li><b>Code signing</b> is a cryptographic signature over the driver binary. It proves the driver hasn’t been modified and ties it to a publisher identity.</li>
+            <li>On modern Windows, <b>kernel-mode code integrity</b> policies typically require a valid signature for kernel drivers, especially when Secure Boot is enabled.</li>
+            <li>The OS verifies the signature chain during load. If it doesn’t meet the system’s policy, the driver simply won’t load.</li>
+        </ul>
+        <div class="small">This isn’t just bureaucracy: unsigned kernel code is a major malware vector. Requiring signatures raises the bar dramatically.</div>
+    </div>
+
+    <div class="card">
+        <h2>Common signing paths (high-level)</h2>
+        <table>
+            <tr>
+                <th>Path</th>
+                <th>What it’s for</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><b>Test signing</b></td>
+                <td>Development on your own machine</td>
+                <td>Requires test mode; not appropriate for normal users.</td>
+            </tr>
+            <tr>
+                <td><b>Attestation signing</b></td>
+                <td>Many non-HW drivers distributed broadly</td>
+                <td>Common for utility drivers; still requires proper packaging and compliance.</td>
+            </tr>
+            <tr>
+                <td><b>WHQL</b></td>
+                <td>Hardware-class drivers with certification</td>
+                <td>Heavier process; provides stronger assurances and ecosystem trust.</td>
+            </tr>
+        </table>
+        <div class="small">Exact requirements evolve with Windows releases and security features, so treat this as conceptual guidance.</div>
+    </div>
+
+    <div class="card">
+        <h2>Dev-only: create a test certificate (no paid certificate)</h2>
+        <ul>
+            <li>This is for <b>development on your own machine</b>. A driver will only load on machines configured to accept test-signed drivers.</li>
+            <li>Example publisher name: <span class="code">Constantine Dokov Gabrovo</span></li>
+        </ul>
+        <div class="small">Steps (run PowerShell as Administrator):</div>
+        <pre class="code">$cert = New-SelfSignedCertificate `
+  -Type CodeSigningCert `
+  -Subject "CN=Constantine Dokov Gabrovo" `
+  -CertStoreLocation "Cert:\LocalMachine\My" `
+  -KeyExportPolicy Exportable `
+  -KeyLength 2048 `
+  -HashAlgorithm SHA256 `
+  -NotAfter (Get-Date).AddYears(5)
+
+$pwd = Read-Host -AsSecureString "PFX password"
+Export-PfxCertificate -Cert $cert -FilePath .\ccm-dev-test.pfx -Password $pwd
+Export-Certificate   -Cert $cert -FilePath .\ccm-dev-test.cer
+
+Import-Certificate -FilePath .\ccm-dev-test.cer -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher"
+Import-Certificate -FilePath .\ccm-dev-test.cer -CertStoreLocation "Cert:\LocalMachine\Root"
+
+bcdedit /set testsigning on</pre>
+        <div class="small">Reboot after enabling test signing. On many Secure Boot configurations, test signing requires Secure Boot disabled.</div>
+        <div class="small">Then (later) you would sign your <span class="code">.sys</span> and <span class="code">.cat</span> using <span class="code">signtool.exe</span> from the Windows Kits.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="read-only">If you ever add a driver: “read-only” rules</h2>
+        <ul>
+            <li><b>Interface:</b> define only “get” IOCTLs (read-only) and use simple fixed-size output structs.</li>
+            <li><b>Validation:</b> refuse unknown IOCTLs; validate buffer lengths and alignment before writing anything.</li>
+            <li><b>Access control:</b> restrict the device ACL so normal users cannot talk to the driver unless you explicitly allow it.</li>
+            <li><b>No dangerous primitives:</b> avoid arbitrary kernel memory access, physical memory mapping, MSR writes, or I/O port writes.</li>
+        </ul>
+        <div class="small">Reality check: any kernel driver runs with high privilege. “Read-only” is a design constraint we enforce in code and interface, not a magical hardware sandbox. The only real safety is: keep the driver tiny and audited.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="roadmap">Future work roadmap (step-by-step)</h2>
+        <ul>
+            <li><b>Step 1:</b> Decide what you truly can’t get from user mode (temperature/fans/board telemetry, etc.).</li>
+            <li><b>Step 2:</b> Pick a design goal: “read-only telemetry broker” with the smallest possible IOCTL surface.</li>
+            <li><b>Step 3:</b> Install Visual Studio + Windows SDK + WDK (KMDF) and create a new KMDF driver project from the template.</li>
+            <li><b>Step 4:</b> Implement one IOCTL at a time (start with a simple version/info IOCTL). Keep output structs fixed-size.</li>
+            <li><b>Step 5:</b> Add strict device ACLs and input validation. Treat user mode as hostile.</li>
+            <li><b>Step 6:</b> Use test signing for development. For distribution, plan for attestation/WHQL and modern Windows security policies.</li>
+        </ul>
+        <div class="small">This roadmap is intentionally conservative: it prioritizes safety and maintainability over “reading everything.”</div>
+    </div>
+
+    <div class="card">
+        <h2>How to verify a driver is legit (what users can check)</h2>
+        <ul>
+            <li><b>Authenticode:</b> verify the signature on the <span class="code">.sys</span> and the catalog (<span class="code">.cat</span>) using Windows tooling.</li>
+            <li><b>Publisher name:</b> Windows will show the signer/publisher in driver properties and during install prompts (when applicable).</li>
+            <li><b>Hash match:</b> compare SHA-256 hashes against a release manifest you publish.</li>
+        </ul>
+        <div class="small">If you want, I can add a release checklist document that includes exact commands (signtool + hash verification) for both dev signing and production distribution.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="etw">Privileges vs drivers: where ETW fits</h2>
+        <ul>
+            <li><b>ETW kernel tracing</b> is still user-mode consumption, but starting certain kernel sessions requires special privileges.</li>
+            <li>If CCM shows <span class="code">StartTrace: PRIVILEGE_NOT_HELD (0x522)</span>, Windows is telling you a required privilege isn’t enabled in the current process token.</li>
+            <li>Administrator elevation often provides the needed privileges, but they may still need to be enabled (CCM attempts this best-effort at startup).</li>
+        </ul>
+        <div class="small">ETW issues are usually about policy/privileges/session conflicts—not about needing a custom driver.</div>
+    </div>
+
+    <div class="card">
+        <h2>Why CCM would ever need a driver</h2>
+        <ul>
+            <li>To read <b>accurate</b> package power/temperature/fans across many vendors reliably.</li>
+            <li>To access <b>vendor/board telemetry</b> that isn’t exposed through standard Windows APIs (or is exposed in a limited/abstracted way).</li>
+            <li>To do it with a stable contract: user-mode UI stays safe and portable, the driver is an optional capability layer.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Target OS note</h2>
+        <ul>
+            <li>This repo targets <b>Windows 10/11 (x64)</b>.</li>
+            <li>The CCM GUI uses Direct2D/DirectWrite and other modern APIs; supporting older Windows versions would require a major rewrite.</li>
+            <li>Driver compatibility and signing rules still differ across Windows releases and security configurations (Secure Boot, VBS/HVCI).</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Security and design principles for a telemetry driver</h2>
+        <ul>
+            <li><b>Minimize scope:</b> no arbitrary read/write primitives; expose only the specific telemetry operations you need.</li>
+            <li><b>Validate everything:</b> lengths, pointers, IOCTL inputs; never trust user mode.</li>
+            <li><b>Rate-limit and sandbox:</b> protect the system from abusive polling.</li>
+            <li><b>Fail closed:</b> if anything looks wrong, refuse the request.</li>
+            <li><b>Keep it optional:</b> the safe build should still be useful without the driver.</li>
+        </ul>
+    </div>
+</body>
+
+</html>

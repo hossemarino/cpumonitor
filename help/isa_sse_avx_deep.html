@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – SSE/AVX deep dive</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>SSE / AVX deep dive</h1>
+        <div class="small"><a href="index.html">Back to contents</a> · <a href="isa.html">ISA overview</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#what">What SSE is</a></li>
+            <li><a href="#registers">Registers</a></li>
+            <li><a href="#families">Instruction families</a></li>
+            <li><a href="#execution">How SIMD changes execution</a></li>
+            <li><a href="#os">OS interaction (XSAVE)</a></li>
+            <li><a href="#freq">Frequency effects</a></li>
+            <li><a href="#tie-in">Tie-in to this app</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AVX, AVX2, FMA, XMM, YMM, ZMM, SIMD, XSAVE, context switch, frequency drop
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="what">What “SSE” actually is</h2>
+        <ul>
+            <li><b>SSE is an extension to x86</b> that adds SIMD (Single Instruction, Multiple Data) vector operations.</li>
+            <li>Instead of operating on one scalar at a time, a SIMD instruction operates on a vector register containing multiple lanes (e.g., 4×32-bit floats).</li>
+            <li>SSE introduced the <span class="code">XMM</span> register file (128-bit registers) and a large family of packed operations.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="registers">Registers: XMM / YMM / ZMM</h2>
+        <table>
+            <tr><th>Name</th><th>Width</th><th>Used by</th><th>Notes</th></tr>
+            <tr><td class="code">XMM0..</td><td>128-bit</td><td>SSE, SSE2, SSE3, SSSE3, SSE4.x</td><td>Holds packed floats/ints; also used for some scalar ops.</td></tr>
+            <tr><td class="code">YMM0..</td><td>256-bit</td><td>AVX, AVX2, FMA</td><td>Upper 128 bits extend XMM; requires OS XSAVE support.</td></tr>
+            <tr><td class="code">ZMM0..</td><td>512-bit</td><td>AVX-512</td><td>Not currently surfaced in this app’s flag list.</td></tr>
+        </table>
+        <div class="small">The key point: wider registers increase throughput potential, but also increase context-switch state size and can impact frequency/power.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="families">Instruction “families” you’ll see in SSE/AVX code</h2>
+        <table>
+            <tr><th>Category</th><th>Examples (conceptual)</th><th>Why it matters</th></tr>
+            <tr><td>Arithmetic</td><td>Add/mul/min/max on packed lanes</td><td>Core for numeric workloads (DSP, ML, graphics).</td></tr>
+            <tr><td>Shuffle/permute</td><td>Rearrange lanes, interleave, broadcast</td><td>Enables vectorizing irregular data layouts.</td></tr>
+            <tr><td>Horizontal ops</td><td>Sum across lanes, dot-products</td><td>Useful for reductions; can be throughput-limited.</td></tr>
+            <tr><td>Compare/mask</td><td>Lane-wise compare produces mask</td><td>Branchless selection and filtering.</td></tr>
+            <tr><td>Loads/stores</td><td>Aligned/unaligned vector loads</td><td>Memory behavior often dominates real performance.</td></tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 id="execution">How SIMD changes how the CPU executes work</h2>
+        <ul>
+            <li>SIMD increases <b>data-level parallelism</b>: one instruction does multiple lane operations.</li>
+            <li>Performance depends on <b>backend width</b> (execution ports, vector ALUs) and <b>memory throughput</b>.</li>
+            <li>Vector code can become <b>bandwidth bound</b>: you run out of cache/memory bandwidth before you run out of execution units.</li>
+            <li>Vector code can also become <b>port-pressure bound</b>: certain operations map to a limited set of execution ports.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="os">OS / kernel interaction: context switching and XSAVE</h2>
+        <ul>
+            <li>On a context switch, the kernel must save/restore architectural state for the old/new thread.</li>
+            <li>For AVX and beyond, the state includes extended register files. The OS must enable support (XSAVE/XRESTORE).</li>
+            <li>Enabling AVX means more state to manage, which can increase context-switch cost in some scenarios.</li>
+            <li>This is why the app’s AVX detection checks for OS support (not just CPUID).</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="freq">Frequency effects (important)</h2>
+        <ul>
+            <li>On many CPUs, heavy AVX/AVX2/AVX-512 workloads can trigger <b>lower operating frequencies</b> to stay within power/thermal limits.</li>
+            <li>This app’s “MHz” readings are best-effort. You may observe frequency drop while AVX-heavy work is running even if CPU% stays high.</li>
+            <li>Because of that, comparing “CPU%” across workloads with different instruction mixes can be misleading.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="tie-in">Practical tie-in to this app</h2>
+        <ul>
+            <li>ISA flags here are capabilities: they say what the CPU and OS can do, not what your workload is currently using.</li>
+            <li>To know whether a specific process is using SSE/AVX, you typically need profiling (ETW sampling, CPU PMU counters, or app-specific instrumentation).</li>
+            <li>ETW can help you see scheduling/interrupt pressure and workload behavior, but not “which instruction executed” without deeper profiling.</li>
+        </ul>
+    </div>
+
+</body>
+
+</html>

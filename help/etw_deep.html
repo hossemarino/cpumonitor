@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – ETW deep dive</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>ETW deep dive (kernel tracing)</h1>
+        <div class="small"><a href="index.html">Back to contents</a> · <a href="etw.html">ETW notes</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#what">What ETW is</a></li>
+            <li><a href="#kernel">Kernel logger sessions</a></li>
+            <li><a href="#na">Why ETW may show as N/A</a></li>
+            <li><a href="#counts">What the app counts</a></li>
+            <li><a href="#qlen">ETW vs scheduling and QLen</a></li>
+            <li><a href="#troubleshoot">Troubleshooting checklist</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            ETW, kernel tracing, kernel logger, StartTrace, EnableFlags, privilege, SeSystemProfilePrivilege, cswitch, ISR, DPC, dropped events, troubleshooting
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="what">What ETW is</h2>
+        <ul>
+            <li><b>ETW (Event Tracing for Windows)</b> is Windows’ high-performance tracing infrastructure.</li>
+            <li>It is a kernel-managed pipeline: providers emit events → ETW buffers them → consumers read and process them.</li>
+            <li>ETW is used by Windows itself, WPR/WPA, Performance Monitor integrations, and many diagnostics tools.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="kernel">Kernel logger sessions</h2>
+        <ul>
+            <li>This app uses the <span class="code">SystemTraceControlGuid</span> kernel provider and starts a real-time session via <span class="code">StartTrace</span>.</li>
+            <li>Kernel tracing is special: it’s controlled via <span class="code">EnableFlags</span> (classic kernel flags) and is subject to system policy.</li>
+            <li>If the session can’t be created, this app intentionally falls back (keeps running) and shows ETW as N/A.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="na">Why ETW may show as N/A in this app</h2>
+        <ul>
+            <li><b>Not elevated:</b> Starting a kernel logger session often requires Administrator privileges (or specific tracing privileges). If <span class="code">StartTrace</span> fails, you’ll see N/A.</li>
+            <li><b>Privilege not held (0x522):</b> Windows may return <span class="code">ERROR_PRIVILEGE_NOT_HELD</span> when the required privilege is not enabled in the current process token (commonly <span class="code">SeSystemProfilePrivilege</span> for the kernel logger).</li>
+            <li><b>Session name conflict:</b> The session name may already exist (another tool / earlier run). The app attempts to stop/restart, but policy may prevent it.</li>
+            <li><b>System policy / hardening:</b> Some systems restrict kernel tracing. Security software can also interfere.</li>
+            <li><b>Event volume:</b> Very busy systems can overflow ETW buffers; consumers may see dropped events. That usually results in under-reporting, not N/A.</li>
+        </ul>
+        <div class="small">CCM surfaces the failure stage and status (e.g. <span class="code">StartTrace: PRIVILEGE_NOT_HELD</span>) directly in the UI header.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="counts">What the app counts</h2>
+        <ul>
+            <li>Specific opcodes are tracked for core scheduler activity: context switches (<span class="code">CSWITCH</span>), interrupts (<span class="code">ISR</span>), and deferred procedure calls (<span class="code">DPC</span>).</li>
+            <li>Additional “category” rates are best-effort by checking <span class="code">EventDescriptor.Keyword</span> bits and mapping them to enabled kernel flags (thread/process/image/file/disk/tcpip/registry/…).</li>
+        </ul>
+        <div class="small">This is a “system busy-ness” view, not strict accounting. Some kernel events won’t carry the keyword mapping the way you’d expect.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="qlen">How ETW relates to scheduling and QLen</h2>
+        <ul>
+            <li><b>QLen</b> tells you there is a backlog of runnable threads.</li>
+            <li><b>Ctx/s + CSWITCH/sec</b> tells you the scheduler is actively switching threads.</li>
+            <li><b>ISR/DPC rates</b> indicate time spent handling interrupts and deferred work; high rates can reduce time available for normal threads and increase latency.</li>
+        </ul>
+        <div class="small">See: <a href="qlen.html">QLen explained</a>.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="troubleshoot">Troubleshooting checklist</h2>
+        <ul>
+            <li>Run the app as Administrator.</li>
+            <li>If ETW still shows N/A, check whether another tool is running a kernel logger (WPR/WPA/xperf/some profilers).</li>
+            <li>Try starting a kernel trace with Windows tools as a sanity check (WPR). If WPR cannot start a kernel trace either, it’s likely policy/privileges.</li>
+        </ul>
+        <div class="small">See also: <a href="drivers_and_privileges.html">Drivers &amp; privileges</a> for the difference between “needs admin/privilege” vs “needs a custom driver”.</div>
+    </div>
+
+</body>
+
+</html>

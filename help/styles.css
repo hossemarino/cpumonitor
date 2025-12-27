@@ -1,0 +1,92 @@
+/*
+   CHM uses an embedded legacy IE engine which does NOT support modern CSS features
+   like CSS custom properties (var(--x)) or prefers-color-scheme.
+   Keep this stylesheet “old IE friendly” using explicit colors.
+*/
+
+body {
+    margin: 24px;
+    font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Arial, sans-serif;
+    background: #ffffff;
+    color: #111114;
+    line-height: 1.45;
+}
+
+a {
+    color: #0b63c7;
+}
+
+header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #dadbe2;
+}
+
+h1,
+h2,
+h3 {
+    margin: 0 0 10px 0;
+}
+
+h2 {
+    margin-top: 22px;
+}
+
+/* Inline code */
+.code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.95em;
+    background: #f5f5dc;
+    border: 1px solid #dadbe2;
+    padding: 1px 5px;
+}
+
+/* Block code */
+pre.code {
+    padding: 10px;
+    margin: 10px 0;
+    white-space: pre-wrap;
+}
+
+.card {
+    border: 1px solid #dadbe2;
+    border-radius: 10px;
+    padding: 14px;
+    background: #f6f7fb;
+    margin: 14px 0;
+}
+
+ul {
+    margin: 8px 0 8px 22px;
+}
+
+.small {
+    color: #55555f;
+    font-size: 0.95em;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+
+th,
+td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #dadbe2;
+    vertical-align: top;
+}
+
+th {
+    text-align: left;
+    color: #1d1d22;
+}
+
+kbd {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    background: #eef0f6;
+    border: 1px solid #dadbe2;
+    padding: 1px 6px;
+    border-radius: 6px;
+}
