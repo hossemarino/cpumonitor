@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – Memory &amp; disks overview</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Memory &amp; disks (overview)</h1>
+        <div class="small"><a href="index.html">Back to contents</a></div>
+    </header>
+
+    <div class="card">
+        <h2 id="what-ccm-shows">What CCM shows</h2>
+        <ul>
+            <li><b>RAM used</b>: physical RAM usage. Windows will often use spare RAM as file cache; “used” is not automatically “bad”.</li>
+            <li><b>Commit</b>: virtual memory commitment vs limit (roughly “how much memory apps asked Windows to back”).</li>
+            <li><b>Disk throughput</b>: read/write traffic reported by Windows performance counters, per PhysicalDisk instance when available.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#what-ccm-shows">What CCM shows</a></li>
+            <li><a href="#ram-vs-rom">RAM vs ROM (firmware, BIOS/UEFI)</a></li>
+            <li><a href="#vrm">VRM</a></li>
+            <li><a href="#cmos">CMOS</a></li>
+            <li><a href="#cpu-lookup-tables">CPU lookup tables, microcode, ISA selection</a></li>
+            <li><a href="#ram-vs-commit">RAM vs commit</a></li>
+            <li><a href="#memory-compression">Memory Compression (Windows)</a></li>
+            <li><a href="#virtual-memory">Virtual memory &amp; pagefiles</a></li>
+            <li><a href="#registers-dataflow">Registers → caches → RAM → storage (7800X3D)</a></li>
+            <li><a href="#memory-hierarchy">Memory hierarchy</a></li>
+            <li><a href="#memory-wall">Memory wall</a></li>
+            <li><a href="#pcie-generations">PCIe generations</a></li>
+            <li><a href="#disk-types">Disk types (SSD/HDD)</a></li>
+            <li><a href="#fragmentation-trim">Fragmentation, TRIM, SLC cache, AHCI</a></li>
+            <li><a href="#transfers-per-second">Transfers per second</a></li>
+            <li><a href="#memory-technologies">Memory technologies</a></li>
+            <li><a href="#memory-latency-timings">Memory timings &amp; latency</a></li>
+            <li><a href="#ddr-generations">DDR generations</a></li>
+            <li><a href="#form-factors">Form factors</a></li>
+            <li><a href="#udimm-rdimm-lrdimm">UDIMM vs RDIMM vs LRDIMM</a></li>
+            <li><a href="#signal-integrity">Signal integrity</a></li>
+            <li><a href="#ecc-support">ECC support</a></li>
+            <li><a href="#reliability">Reliability notes</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            RAM, ROM, BIOS, EFI, UEFI, Secure Boot, GPT, MBR, ESP, CMOS, RTC, VRM, voltage regulation,
+            microcode, firmware, CPUID, instruction set, ISA, SSE, AVX, registers, cache, L1, L2, L3, V-Cache,
+            TLB, page tables, branch predictor, BTB, RAS, virtual memory, pagefile, commit, working set, Memory Compression,
+            PCIe, NVMe, DMA, MMIO, IOMMU, SATA, AHCI, SSD, HDD, fragmentation, TRIM, SLC cache,
+            DDR, DDR4, DDR5, LPDDR, SDRAM, DRAM, SRAM, timings, CL, tRCD, tRP, latency, bandwidth,
+            DIMM, SO-DIMM, UDIMM, RDIMM, LRDIMM, ECC, signal integrity
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="ram-vs-rom">RAM vs ROM (and where firmware lives)</h2>
+        <ul>
+            <li><b>RAM</b> (Random Access Memory) is <b>volatile</b> working memory. When power is removed, its contents are lost.</li>
+            <li><b>ROM</b> (Read‑Only Memory) historically meant non-volatile memory that holds fixed code/data. On modern PCs, “ROM” usually means <b>flash memory</b> that <i>can</i> be rewritten (but not as frequently as RAM).</li>
+        </ul>
+        <h3>BIOS / UEFI</h3>
+        <ul>
+            <li>Modern systems use <b>UEFI firmware</b> (often still called “BIOS” colloquially).</li>
+            <li>UEFI firmware is stored on the motherboard in a <b>SPI NOR flash chip</b> (a small 8‑pin or similar package). This is the “BIOS chip”.</li>
+            <li>On power‑on, firmware initializes the CPU, memory controller, DRAM training, devices, then boots the OS (often via a boot manager stored on disk).</li>
+        </ul>
+
+        <h3>EFI vs UEFI vs “legacy BIOS” (what’s the difference?)</h3>
+        <ul>
+            <li><b>Legacy BIOS</b>: the older PC firmware model dating back to the IBM PC era. It provides a set of interrupt-based services and typically boots via <b>MBR</b> (Master Boot Record). It is constrained by older design assumptions and compatibility requirements.</li>
+            <li><b>EFI</b> (Extensible Firmware Interface): Intel’s original specification that introduced a modern firmware model (pre-boot applications, drivers, standardized services).</li>
+            <li><b>UEFI</b> (Unified Extensible Firmware Interface): the industry standard that evolved from EFI. When people say “UEFI”, they usually mean “the modern firmware interface” used by PCs today.</li>
+        </ul>
+        <ul>
+            <li><b>Boot model:</b> UEFI typically boots from a <b>GPT</b> partitioned disk, loading a bootloader from the <b>EFI System Partition (ESP)</b> instead of executing an MBR bootstrap.</li>
+            <li><b>Drivers and pre-boot apps:</b> UEFI can run pre-boot drivers and applications in a more structured environment than legacy BIOS.</li>
+            <li><b>NVRAM variables:</b> UEFI stores boot entries and settings as variables (often in firmware flash), which lets the OS manage boot configuration more cleanly.</li>
+            <li><b>Secure Boot:</b> a UEFI feature that can enforce signature verification of pre-boot components, reducing bootkits (configuration-dependent).</li>
+            <li><b>Compatibility mode:</b> many boards can emulate legacy BIOS booting (CSM), but modern Windows installs generally prefer pure UEFI.</li>
+        </ul>
+        <h3>Motherboard “memory chips” (common ones)</h3>
+        <ul>
+            <li><b>UEFI/BIOS flash</b>: SPI NOR flash chip storing firmware.</li>
+            <li><b>Embedded controller (EC)</b> firmware (mostly laptops): often separate flash for keyboard/thermal/battery controller firmware.</li>
+            <li><b>VRM controllers</b>: may have NVM/OTP for configuration, not general-purpose memory.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="vrm">VRM (Voltage Regulator Module)</h2>
+        <div class="small">
+            A CPU needs low voltage at very high current with fast transient response. Your PSU provides 12V/5V/3.3V; the motherboard must convert and regulate that into CPU/GPU/SoC rails.
+        </div>
+        <ul>
+            <li><b>What it is:</b> the motherboard power delivery circuitry (controllers + MOSFETs/power stages + inductors + capacitors).</li>
+            <li><b>What it does:</b> converts (steps down) 12V to e.g. ~1V-ish rails and holds it stable while load changes rapidly (idle → boost → heavy load).</li>
+            <li><b>Why it matters:</b> VRM quality impacts sustained boost behavior, stability under load, and thermals. A weak/hot VRM can throttle or destabilize a high-end CPU.</li>
+            <li><b>How it relates to “memory” topics:</b> stable rails are required for high-speed signaling (CPU core, SoC/IO, DRAM). Overclocking memory often increases sensitivity to VRM/board quality.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="cmos">CMOS (what it is)</h2>
+        <ul>
+            <li><b>CMOS RAM</b> is a small amount of <b>battery-backed memory</b> traditionally used to store firmware settings (boot order, timings, etc.) and the real‑time clock (RTC).</li>
+            <li>On modern PCs, settings are typically stored in <b>NVRAM inside the UEFI firmware flash</b>, but the term “CMOS” is still widely used for “firmware settings”.</li>
+            <li>The <b>CMOS battery</b> (usually a CR2032 on desktops) keeps the RTC running and preserves settings on older designs; a dead battery can cause clock resets and settings loss.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="cpu-lookup-tables">CPU “lookup tables”, microcode, and “flashing a CPU”</h2>
+        <h3>Lookup tables inside a CPU (examples)</h3>
+        <ul>
+            <li><b>Cache tags/data</b>: SRAM arrays used to store recently accessed memory lines.</li>
+            <li><b>TLB</b> (Translation Lookaside Buffer): a cache of recent virtual→physical address translations.</li>
+            <li><b>Branch predictor structures</b>: tables that help guess the next instruction path for performance.</li>
+        </ul>
+
+        <h3>How does the CPU “know which instruction set to use”?</h3>
+        <ul>
+            <li><b>The CPU doesn’t guess.</b> The program contains specific machine-code instructions (opcodes). The CPU decodes exactly what the program asks it to execute.</li>
+            <li><b>“Instruction set” in practice:</b> x86-64 CPUs support a base ISA and optional extensions (SSE2/AVX2/etc.). Code that uses an extension must be compiled (or JIT-generated) to include those opcodes.</li>
+            <li><b>How software chooses:</b> apps/libraries often do <b>feature detection</b> (CPUID on x86) and then dispatch to the best implementation (e.g., AVX2 path vs SSE path vs scalar path).</li>
+            <li><b>OS role:</b> for some features (notably wide vector state), the OS must enable saving/restoring that state during context switches; modern OSes do this for common extensions.</li>
+        </ul>
+
+        <h3>What does a TLB “look like” conceptually?</h3>
+        <div class="small">
+            A TLB is like a tiny associative cache. Conceptually it stores entries such as:
+        </div>
+        <pre>
+VirtualPageNumber + AddressSpaceID  ->  PhysicalFrameNumber + permissions
+        </pre>
+        <ul>
+            <li><b>Hit:</b> translation is available immediately; the core can form a physical address quickly.</li>
+            <li><b>Miss:</b> the CPU performs a page-table walk (hardware or assisted), which is much slower, then inserts the result into the TLB.</li>
+            <li><b>Why it matters:</b> many random memory accesses can become “TLB-bound” even if bandwidth is fine.</li>
+        </ul>
+
+        <h3>Branch predictors: how do they predict?</h3>
+        <div class="small">
+            Branch prediction is essentially pattern recognition on prior branch behavior. Predictors use multiple structures; exact designs are proprietary and complex, but the core idea is: “branches tend to behave consistently or follow patterns”.
+        </div>
+        <ul>
+            <li><b>Local history:</b> predicts a branch based on its own recent taken/not-taken pattern.</li>
+            <li><b>Global history:</b> predicts based on the recent history of many branches (captures correlations).</li>
+            <li><b>BTB</b> (Branch Target Buffer): caches the destination address for taken branches/calls/returns.</li>
+            <li><b>Return predictor / RAS</b>: predicts return addresses using a small stack-like structure.</li>
+            <li><b>Mispredict cost:</b> when wrong, the CPU must throw away speculative work and restart from the correct path (wasted cycles).</li>
+        </ul>
+        <h3>Microcode and CPU firmware</h3>
+        <ul>
+            <li>Modern x86 CPUs execute many instructions via internal sequences that can be altered by <b>microcode updates</b> (bug fixes / mitigations).</li>
+            <li>Microcode updates are typically applied <b>at boot</b> (by UEFI/BIOS) and/or by the <b>OS</b>. They are generally <b>not permanent</b> writes to the CPU; they are loaded into the CPU during initialization.</li>
+        </ul>
+        <h3>“Flashing CPUs” (what’s real vs myth)</h3>
+        <ul>
+            <li>For desktop/server x86 CPUs, you normally <b>do not flash the CPU</b> like you flash a BIOS. Updates are delivered as microcode payloads loaded on boot.</li>
+            <li>Some systems (MCUs, SoCs, embedded devices) have on-chip non-volatile storage and truly support “flashing”, but that’s a different class of hardware than typical PC CPUs.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="ram-vs-commit">RAM vs commit (why they differ)</h2>
+        <ul>
+            <li><b>RAM</b> is physical memory chips. It’s fast, but finite.</li>
+            <li><b>Commit</b> is a Windows accounting concept: committed pages must be backed by either RAM or the page file.</li>
+            <li>Commit can rise even if RAM is stable, and RAM can be high even if commit is moderate (file cache / standby).</li>
+        </ul>
+        <div class="small">
+            Tip: commit pressure is often a better “out of memory risk” signal than “free RAM”.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="memory-compression">Memory Compression (Windows)</h2>
+        <ul>
+            <li><b>What it is:</b> a Windows feature that stores some infrequently-used memory pages in a <b>compressed in-RAM store</b> instead of immediately paging them out to disk.</li>
+            <li><b>Why it exists:</b> compressing pages can reduce disk paging and keep the system more responsive under memory pressure.</li>
+            <li><b>Trade-offs:</b> it saves RAM at the cost of some CPU work to compress/decompress pages.</li>
+            <li><b>How it shows up:</b> in Task Manager it’s often shown under “Memory” as “Compressed”, and can be attributed to <b>System</b>. CCM currently shows overall <b>RAM used</b> and per-process Working Set; it does not break out “compressed” as a separate line item.</li>
+        </ul>
+        <div class="small">
+            Practical takeaway: “high RAM used” can include cache + compressed pages; it’s not automatically a problem unless you also see sustained commit pressure, paging, or performance issues.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="virtual-memory">Virtual memory: how the OS uses RAM (and pagefiles)</h2>
+        <ul>
+            <li><b>Virtual memory</b> means each process sees a large, private address space. The OS maps virtual addresses to physical RAM pages (or to disk-backed storage).</li>
+            <li><b>Pages</b> are fixed-size chunks (commonly 4 KiB) that the OS moves and maps independently.</li>
+            <li><b>Working set</b> is the set of pages from a process that are currently resident in RAM.</li>
+            <li><b>Page fault</b> occurs when a process accesses a virtual page that isn’t currently mapped in RAM; the OS resolves it by mapping it (sometimes requiring I/O).</li>
+        </ul>
+        <h3>What the pagefile is (Windows)</h3>
+        <ul>
+            <li>The <b>pagefile</b> is a disk-backed store used to back some committed memory and to enable paging under memory pressure.</li>
+            <li>Not all paging is “RAM → pagefile”. Many pages are backed by files (EXEs/DLLs, memory-mapped files); the OS can drop them and reload from their original file when needed.</li>
+            <li>Without a pagefile, some workloads can still run, but <b>commit limit</b> can be lower and some crash-dump / allocation behaviors change.</li>
+        </ul>
+        <div class="small">
+            Practical implication: a system can have “free RAM” but be near the commit limit, and vice‑versa.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="registers-dataflow">Registers, caches, RAM, storage: how data moves (AMD Ryzen 7 7800X3D context)</h2>
+        <div class="small">
+            This is a practical mental model for how a modern x86-64 CPU (like the Ryzen 7 7800X3D) executes instructions and moves data. Exact microarchitectural details vary, but the pipeline stages and hierarchy are consistent across modern CPUs.
+        </div>
+
+        <h3>Can we “utilize the registers”?</h3>
+        <ul>
+            <li><b>Yes—indirectly.</b> Registers are used by machine code. High-level languages rely on the compiler to keep hot values in registers.</li>
+            <li><b>Why you care:</b> keeping values in registers avoids loads/stores to memory and reduces pressure on caches.</li>
+        </ul>
+
+        <h3>Small example (x86-64)</h3>
+        <div class="small">Add two integers and store the result:</div>
+        <pre>
+; Conceptual assembly
+mov eax, [a]      ; load from memory into a register
+add eax, [b]      ; add memory operand
+mov [c], eax      ; store result back to memory
+        </pre>
+        <ul>
+            <li><b>Registers</b> (like EAX/RAX) are the CPU’s fast scratchpad.</li>
+            <li><b>Loads/stores</b> go through the cache hierarchy; they do not “jump straight” to DRAM unless needed.</li>
+        </ul>
+
+        <h3>How an instruction touches the hierarchy</h3>
+        <ul>
+            <li><b>Fetch:</b> instructions are fetched from memory via instruction caches.</li>
+            <li><b>Decode:</b> instruction bytes are decoded into internal operations (often called micro-ops).</li>
+            <li><b>Execute:</b> arithmetic uses registers; memory operations use load/store units.</li>
+            <li><b>Cache path:</b> a load checks L1 → L2 → L3. If it misses all caches, it goes to DRAM through the memory controller.</li>
+            <li><b>7800X3D note:</b> the “X3D” part means the CPU has a large extra L3 cache (stacked 3D V‑Cache). This can dramatically reduce DRAM trips for cache-friendly workloads (games are often in this category).</li>
+        </ul>
+
+        <h3>Where PCIe and storage fit</h3>
+        <ul>
+            <li><b>NVMe SSDs</b> are PCIe devices. They move data using <b>DMA</b> (Direct Memory Access) into system RAM buffers.</li>
+            <li><b>The CPU doesn’t read storage like RAM.</b> The OS asks the storage driver to fetch blocks; the device DMA’s into RAM; then the CPU reads the RAM.</li>
+            <li><b>Chipset vs CPU lanes:</b> some PCIe lanes attach directly to the CPU, others go through the chipset. Going through the chipset can add latency and share bandwidth with other devices.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="memory-hierarchy">Memory hierarchy (why caches exist)</h2>
+        <div class="small">
+            CPUs are far faster than main memory latency. To avoid stalling constantly, CPUs rely on a hierarchy of caches and buffers.
+        </div>
+        <ul>
+            <li><b>Registers</b>: fastest storage inside the core.</li>
+            <li><b>L1 cache</b>: tiny and extremely low latency.</li>
+            <li><b>L2 cache</b>: larger, slightly slower.</li>
+            <li><b>L3 / LLC</b>: shared (often), larger again.</li>
+            <li><b>DRAM</b> (system RAM): much higher latency; high bandwidth but far slower to access than caches.</li>
+            <li><b>Storage</b> (NVMe/SATA/HDD): orders of magnitude higher latency than DRAM.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="memory-wall">The “memory wall” (CPU speed vs memory speed)</h2>
+        <div class="small">
+            The <b>memory wall</b> is the growing gap between CPU compute throughput and memory latency/bandwidth. Modern CPUs can execute many operations per cycle, but frequently stall waiting for data from DRAM.
+        </div>
+
+        <h3>Latency & bandwidth intuition</h3>
+        <ul>
+            <li><b>On-core</b> (registers/L1) is extremely fast and close.</li>
+            <li><b>DRAM</b> is much slower to access; bandwidth can be high, but latency is still large relative to CPU cycles.</li>
+            <li><b>PCIe</b> is primarily an I/O fabric; fast for devices (GPUs, NVMe), but still far slower latency than DRAM.</li>
+            <li><b>SATA</b> is a legacy storage interface with much lower throughput than PCIe/NVMe.</li>
+            <li><b>HDD</b> adds mechanical latency; random I/O is very slow.</li>
+        </ul>
+        <div class="small">
+            Rule of thumb: caches hide latency; memory controllers and prefetchers try to keep bandwidth flowing.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="pcie-generations">PCIe generations (transfer rates)</h2>
+        <div class="small">
+            PCI Express link speed is often described by <b>GT/s</b> (giga-transfers per second) per lane. Effective payload throughput is lower than raw rate due to encoding and protocol overhead. Values below are common ballparks for <b>one lane, one direction</b>.
+        </div>
+        <table>
+            <tr>
+                <th>PCIe gen</th>
+                <th>Raw rate</th>
+                <th>Approx payload / lane / direction</th>
+            </tr>
+            <tr>
+                <td class="code">Gen 1</td>
+                <td>2.5 GT/s</td>
+                <td>~250 MB/s</td>
+            </tr>
+            <tr>
+                <td class="code">Gen 2</td>
+                <td>5.0 GT/s</td>
+                <td>~500 MB/s</td>
+            </tr>
+            <tr>
+                <td class="code">Gen 3</td>
+                <td>8.0 GT/s</td>
+                <td>~985 MB/s</td>
+            </tr>
+            <tr>
+                <td class="code">Gen 4</td>
+                <td>16 GT/s</td>
+                <td>~1.97 GB/s</td>
+            </tr>
+            <tr>
+                <td class="code">Gen 5</td>
+                <td>32 GT/s</td>
+                <td>~3.94 GB/s</td>
+            </tr>
+            <tr>
+                <td class="code">Gen 6</td>
+                <td>64 GT/s</td>
+                <td>~7.88 GB/s</td>
+            </tr>
+        </table>
+        <div class="small">
+            Notes: multiply by lane count (x4, x8, x16) for theoretical link throughput. Real application throughput varies by device and workload.
+        </div>
+
+        <h3>How PCIe relates to storage and “memory-like” behavior</h3>
+        <ul>
+            <li><b>NVMe uses PCIe</b>: an NVMe SSD typically uses x4 lanes. The PCIe generation and lane width cap its peak throughput.</li>
+            <li><b>DMA into RAM</b>: high-speed devices transfer into RAM; RAM is still the CPU’s working set.</li>
+            <li><b>Memory-mapped I/O (MMIO)</b>: devices expose control registers via PCIe address space. The CPU reads/writes those registers to command the device.</li>
+            <li><b>IOMMU</b>: the OS can use an IOMMU to map device DMA safely into process/OS memory (security + virtualization).</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="disk-types">Disk types (why SSD feels different from HDD)</h2>
+        <ul>
+            <li><b>HDD</b>: spinning platters + moving head. Seeks dominate random I/O latency; fragmentation hurts more.</li>
+            <li><b>SSD</b>: NAND flash + controller. Sustained writes can slow when SLC cache fills; TRIM helps long-term performance.</li>
+            <li><b>NVMe vs SATA</b>: NVMe (PCIe) generally has lower latency and better parallelism than SATA/AHCI.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="fragmentation-trim">Fragmentation, defragmentation, TRIM, SLC cache, AHCI</h2>
+        <h3>What is fragmentation?</h3>
+        <ul>
+            <li><b>Fragmentation</b> means a file’s data is split into many non-contiguous pieces on the storage medium.</li>
+            <li>On <b>HDDs</b>, fragmentation hurts because the drive must physically seek between fragments (high random-access cost).</li>
+        </ul>
+
+        <h3>Why you generally do not “defrag” SSDs</h3>
+        <ul>
+            <li>SSDs have near-uniform access latency across the device; fragmentation is much less harmful than on HDDs.</li>
+            <li>Defragmentation causes many writes. SSD flash has limited write endurance and extra writes increase <b>write amplification</b> and wear.</li>
+            <li>Modern OSes run SSD-appropriate maintenance (TRIM and related optimizations) rather than classic defrag.</li>
+        </ul>
+
+        <h3>TRIM</h3>
+        <ul>
+            <li><b>TRIM</b> is an OS command that tells an SSD which blocks are no longer in use (freed by the filesystem).</li>
+            <li>This helps the SSD’s controller perform garbage collection and maintain write performance over time.</li>
+        </ul>
+
+        <h3>SLC cache</h3>
+        <ul>
+            <li>Many consumer SSDs use part of the flash as an <b>SLC cache</b> (writing fewer bits per cell temporarily) to achieve fast burst writes.</li>
+            <li>When the cache fills, sustained write speed can drop until the SSD folds that data into denser formats (TLC/QLC) internally.</li>
+        </ul>
+
+        <h3>AHCI</h3>
+        <ul>
+            <li><b>AHCI</b> is a host controller interface used primarily for <b>SATA</b> storage (legacy SSDs/HDDs on SATA).</li>
+            <li><b>NVMe</b> is the modern interface for PCIe SSDs; it supports deep queues and is designed for low latency and parallelism.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="transfers-per-second">Notes on “transfers per second”</h2>
+        <ul>
+            <li><b>Memory (DDR)</b> is often quoted in <b>MT/s</b> (mega-transfers/sec). “DDR4-3200” is 3200 MT/s data rate.</li>
+            <li><b>Disk</b> is often discussed as throughput (MB/s) and latency (ms/µs). High throughput doesn’t always mean low latency.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="memory-latency-timings">Memory latency and timings (CL/tRCD/tRP/…)</h2>
+        <div class="small">
+            RAM speed has two big dimensions: <b>bandwidth</b> (MT/s) and <b>latency</b> (how long it takes for a request to produce data). Timing numbers are expressed in <b>memory clock cycles</b>, not seconds.
+        </div>
+
+        <h3>Common timing terms</h3>
+        <ul>
+            <li><b>CL</b> (CAS Latency): delay from issuing a column read command to when data begins returning.</li>
+            <li><b>tRCD</b> (RAS to CAS Delay): delay between activating a row and accessing a column in that row.</li>
+            <li><b>tRP</b> (Row Precharge): time to close a row before opening another row in the same bank.</li>
+            <li><b>tRAS</b> (Row Active Time): minimum time a row must remain open to complete operations.</li>
+            <li><b>Command rate (CR)</b>: timing related to command/address scheduling (often 1T/2T).</li>
+        </ul>
+
+        <h3>Turning “cycles” into nanoseconds</h3>
+        <ul>
+            <li>DDR is quoted in <b>MT/s</b>. The underlying clock is typically half that (because DDR transfers twice per clock).</li>
+            <li>Example: <span class="code">DDR5-6000</span> → ~3000 MHz clock → ~0.333 ns per cycle.</li>
+            <li>So <span class="code">CL30</span> is ~10 ns <i>for the CAS portion</i>, but total memory access latency includes other steps and queueing.</li>
+        </ul>
+
+        <h3>How latency accumulates (layers)</h3>
+        <ul>
+            <li><b>Core → L1/L2/L3</b>: if the data is in cache, you avoid DRAM entirely (fastest path).</li>
+            <li><b>TLB</b>: if translation misses, a page-table walk adds latency even before DRAM access completes.</li>
+            <li><b>Memory controller + DRAM</b>: requests queue, are scheduled across banks/ranks, and may require row activate/precharge (tRCD/tRP) before CL applies.</li>
+            <li><b>Interconnect</b>: on modern multi-die designs, requests may traverse an interconnect fabric between cores, cache slices, and IO/memory controllers.</li>
+        </ul>
+        <div class="small">
+            Practical takeaway: higher MT/s increases bandwidth; lower effective ns timings improves latency-sensitive workloads. The best choice depends on your workload.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="memory-technologies">Memory technologies (legacy → modern)</h2>
+        <div class="small">
+            “RAM” is a family of technologies. Below is a practical overview of common types you’ll see referenced.
+        </div>
+
+        <h3>SRAM vs DRAM</h3>
+        <ul>
+            <li><b>SRAM</b>: very fast, expensive per bit, does not require refresh. Used for CPU caches and small high-speed buffers.</li>
+            <li><b>DRAM</b>: dense and cheaper per bit, but requires periodic refresh. Used for system memory.</li>
+        </ul>
+
+        <h3>SDR, SDRAM, DDR SDRAM</h3>
+        <ul>
+            <li><b>SDR</b> (Single Data Rate): one transfer per clock edge (legacy).</li>
+            <li><b>SDRAM</b>: Synchronous DRAM (timed to a clock). The dominant family that system memory evolved from.</li>
+            <li><b>DDR SDRAM</b>: Double Data Rate SDRAM; transfers on both clock edges. DDR1 → DDR2 → DDR3 → DDR4 → DDR5.</li>
+        </ul>
+
+        <h3>RDRAM, eDRAM, LPDDR</h3>
+        <ul>
+            <li><b>RDRAM</b> (Rambus DRAM): a historical DRAM technology used in some older systems; largely obsolete in PCs.</li>
+            <li><b>eDRAM</b> (embedded DRAM): DRAM integrated on-package or on-die, used as a cache-like layer on some designs.</li>
+            <li><b>LPDDR</b>: Low Power DDR (phones/laptops). Optimized for power with different signaling and packaging than desktop DIMMs.</li>
+        </ul>
+
+        <h3>SGRAM</h3>
+        <ul>
+            <li><b>SGRAM</b> (Synchronous Graphics RAM): older graphics-oriented DRAM variant; modern GPUs use GDDR families and HBM instead.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="ddr-generations">DDR generations (what changes)</h2>
+        <div class="small">
+            DDR generations increase bandwidth and improve signaling/power features. They are <b>not physically or electrically compatible</b> across generations.
+        </div>
+        <ul>
+            <li><b>DDR1 → DDR2 → DDR3</b>: large signaling and prefetch evolution; voltage reductions over time.</li>
+            <li><b>DDR4</b>: higher densities and speeds than DDR3; very common on desktops/servers for many years.</li>
+            <li><b>DDR5</b>: higher bandwidth and density potential; introduces architectural changes like on‑DIMM power management (PMIC) and sub-channel organization.</li>
+        </ul>
+        <div class="small">
+            Speed is often written as <span class="code">DDR5‑6000</span> (6000 MT/s). Latency is influenced by timings (CL/tRCD/tRP/etc.) and memory controller behavior.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="form-factors">Form factors: DIMM, SO‑DIMM, and more</h2>
+        <ul>
+            <li><b>DIMM</b>: standard desktop/server modules (longer stick).</li>
+            <li><b>SO‑DIMM</b>: smaller modules used in many laptops and small-form-factor PCs.</li>
+            <li><b>UDIMM vs RDIMM vs LRDIMM</b>: unbuffered vs registered vs load-reduced (common in servers); affects capacity limits and electrical loading.</li>
+            <li><b>ECC</b>: adds error-correcting bits. Requires platform support (CPU + motherboard) to operate in ECC mode.</li>
+            <li><b>CAMM / LPCAMM2</b>: newer module styles seen in some laptops; aim to improve density and signal integrity compared to SO‑DIMMs.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="udimm-rdimm-lrdimm">UDIMM vs RDIMM vs LRDIMM (capacity and electrical loading)</h2>
+        <div class="small">
+            Memory channels are high-speed electrical buses. Each additional DRAM chip rank adds load (capacitance) and makes signal integrity harder. Server platforms use buffering to scale to more capacity.
+        </div>
+        <ul>
+            <li><b>UDIMM</b> (unbuffered): the memory controller drives the DRAM devices directly. Great for low latency and typical desktop capacities; electrical loading limits how many modules/ranks per channel you can run at high speeds.</li>
+            <li><b>RDIMM</b> (registered): buffers (registers) the command/address lines. This reduces load seen by the memory controller and improves stability with more modules per channel, enabling higher capacities (common in servers).</li>
+            <li><b>LRDIMM</b> (load-reduced): adds buffering that further reduces effective load (often including data buffering). Designed to support very high capacities per channel.</li>
+        </ul>
+        <div class="small">
+            Trade-off: buffering can add a small amount of latency, but enables much larger memory footprints and better electrical margins.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="signal-integrity">Signal integrity (what it is)</h2>
+        <div class="small">
+            <b>Signal integrity</b> is “does a 0/1 arrive at the receiver clearly enough to be interpreted correctly at high speed?”. At modern DDR/PCIe rates, wires behave like transmission lines and small imperfections matter.
+        </div>
+        <ul>
+            <li><b>Reflections:</b> impedance mismatches cause waves to reflect, distorting edges.</li>
+            <li><b>Crosstalk:</b> neighboring traces couple energy, adding noise.</li>
+            <li><b>Attenuation:</b> higher frequencies lose strength over distance/material.</li>
+            <li><b>Jitter:</b> timing uncertainty (clock and data edges shift).</li>
+            <li><b>Eye diagram:</b> engineers visualize “eye opening”; a more open eye generally means better margin.</li>
+        </ul>
+        <div class="small">
+            Why it affects you: higher memory speeds (and more DIMMs/ranks) reduce margin. Motherboard layout quality and BIOS training settings become more important.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="ecc-support">ECC support (Ryzen 7 7800X3D and platform caveats)</h2>
+        <div class="small">
+            ECC is a platform feature: the CPU’s memory controller must support it, and the motherboard/BIOS must route and enable it correctly. Vendor validation and reporting also matter.
+        </div>
+        <ul>
+            <li><b>CPU vs motherboard:</b> even if a CPU can operate with ECC UDIMMs, a consumer motherboard may not validate it, may not enable it, or may not expose error reporting.</li>
+            <li><b>AM5 note:</b> desktop Ryzen platforms generally use <b>UDIMMs</b> (unbuffered). <b>RDIMMs/LRDIMMs</b> are typically server/workstation territory and are not generally supported on consumer desktop platforms.</li>
+            <li><b>For your 7800X3D:</b> treat ECC as “<b>possible if the motherboard/BIOS supports ECC UDIMMs</b>”. The safest way to answer is to check your motherboard manual/spec page for “ECC (Unbuffered)” support and whether it runs in ECC mode (not just “ECC physically fits”).</li>
+        </ul>
+        <div class="small">
+            Tip: if ECC is important, prefer boards explicitly advertising ECC support and reporting. Then validate with a memory test and OS-level reporting if available.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="reliability">Reliability quick notes</h2>
+        <ul>
+            <li><b>ECC memory</b> can correct some single-bit errors and detect many multi-bit errors, improving reliability.</li>
+            <li>Consumer desktops often use non-ECC; servers/workstations commonly use ECC with supported platforms.</li>
+        </ul>
+    </div>
+</body>
+
+</html>

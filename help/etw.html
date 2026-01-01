@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – ETW</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>ETW kernel tracing notes</h1>
+        <div class="small"><a href="index.html">Back to contents</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#what">What ETW is and what CCM does</a></li>
+            <li><a href="#privileges">Privileges &amp; fallback behavior</a></li>
+            <li><a href="#categorization">How CCM categorizes event rates</a></li>
+            <li><a href="#perf">Performance and safety notes</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            ETW, Event Tracing for Windows, kernel logger, SystemTraceControlGuid, context switch, scheduler, DPC, ISR, syscalls, privileges, admin
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="what">What ETW is and what CCM does</h2>
+        <div class="small">
+            <b>ETW</b> (Event Tracing for Windows) is a high-performance tracing system built into Windows.
+            The kernel can emit events for scheduling, thread activity, interrupts, file/network I/O, and more.
+            CCM uses ETW only for rates/volume signals (events/sec), not for recording full traces.
+        </div>
+        <ul>
+            <li>Starts a real-time kernel logger session (SystemTraceControlGuid).</li>
+            <li>Enables a broad set of kernel flags (thread/process/image load/dispatcher/syscall/…).</li>
+            <li>Counts events and reports rates (events/sec) in the header.</li>
+        </ul>
+        <div class="small">
+            Practical view: this gives a “kernel activity meter” that complements PDH counters like <span class="code">Ctx/s</span>.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="privileges">Privileges &amp; fallback</h2>
+        <ul>
+            <li>Some kernel flags/events may require Admin (or may be blocked by system policy).</li>
+            <li>If the ETW session cannot be started, the app keeps running and ETW fields show as N/A/0.</li>
+            <li>Common reasons: not elevated, tracing policy restrictions, or conflicts with an existing kernel logger session.</li>
+        </ul>
+        <div class="small">
+            CCM prints the reason text in the header so you can tell “missing permissions” from “policy disabled” from “session already running”.
+            See <a href="etw_deep.html">ETW deep dive</a> for troubleshooting and background.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="categorization">How rates are categorized</h2>
+        <div>
+            The app classifies kernel events using the ETW <span class="code">EventDescriptor.Keyword</span> bitmask,
+            which generally mirrors enabled kernel flags.
+            This is best-effort and intended for a "how busy is the kernel" view, not precise accounting.
+        </div>
+        <div class="small">
+            If you need exact breakdowns (per process, per thread, per stack), you typically capture an ETW trace to disk and analyze with tools like Windows Performance Analyzer (WPA).
+            CCM intentionally stays lightweight and only shows live rates.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="perf">Performance and safety note</h2>
+        <div>
+            Enabling many kernel flags can generate very high event volume on busy systems.
+            The tracing runs on a background thread, but it may still increase CPU usage.
+        </div>
+        <ul>
+            <li><b>Overhead:</b> event generation + delivery has cost; the busier the system, the higher the cost.</li>
+            <li><b>Privacy:</b> CCM does not store ETW events. It only counts categories and rates.</li>
+            <li><b>Robustness:</b> if ETW cannot start, CCM continues without it (no crash or hard dependency).</li>
+        </ul>
+    </div>
+</body>
+
+</html>

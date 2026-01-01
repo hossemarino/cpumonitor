@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – Processor Queue Length (QLen)</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Processor Queue Length (QLen)</h1>
+        <div class="small"><a href="index.html">Back to contents</a> · <a href="metrics.html">Metrics</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#what-it-is">What it is</a></li>
+            <li><a href="#interpret">How to interpret it</a></li>
+            <li><a href="#caveats">Limitations and caveats</a></li>
+            <li><a href="#etw-connection">How it connects to ETW</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            QLen, Processor Queue Length, runnable threads, ready queue, scheduler, CPU saturation, context switches, ETW, perfmon, PDH
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="what-it-is">What it is</h2>
+        <ul>
+            <li><span class="code">QLen</span> is read from the PDH counter <span class="code">\System\Processor Queue Length</span>.</li>
+            <li>It is a snapshot of the number of threads that are <b>ready to run</b> (runnable) but waiting for CPU time.</li>
+            <li>It is <b>not per-core</b>. It’s a system-wide queue length concept.</li>
+        </ul>
+        <div class="small">
+            Think of it as: “How many threads would run immediately if more CPU time appeared?”
+            It’s often used as an overload indicator: “Are there more runnable threads than the CPU can service right now?”
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="interpret">How to interpret it</h2>
+        <div class="small">
+            Interpretation depends on the machine size. A QLen of 2 on a 2‑thread CPU can be huge; on a 32‑thread CPU it may be minor.
+            Consider QLen together with CPU% and context-switch activity.
+        </div>
+        <table>
+            <tr><th>Symptom</th><th>Common interpretation</th></tr>
+            <tr><td>CPU% is high and QLen grows</td><td>CPU saturation: work is arriving faster than cores can complete it.</td></tr>
+            <tr><td>CPU% is low but QLen spikes</td><td>Can happen with short bursts, scheduler effects, priority inversions, or measurement timing.</td></tr>
+            <tr><td>QLen stays near 0 even at high CPU%</td><td>Often means the workload has about as many runnable threads as CPUs and is keeping them busy without a backlog.</td></tr>
+        </table>
+        <div class="small">
+            If you want a quick heuristic, compare “QLen” to the number of logical CPUs: persistent QLen significantly above that suggests a backlog.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="caveats">Limitations and caveats</h2>
+        <ul>
+            <li>It’s a coarse metric. It doesn’t tell you <i>which</i> threads are queued or why they’re runnable.</li>
+            <li>It doesn’t account for I/O wait directly (threads blocked on I/O are not runnable).</li>
+            <li>On systems with many logical CPUs, a “small” QLen might still be meaningful. You usually compare it to the machine’s compute capacity.</li>
+            <li>It can be noisy at small sampling intervals because runnable transitions happen constantly.</li>
+        </ul>
+        <div class="small">
+            Also note: a system can feel “slow” due to disk/network/lock contention even if QLen is low. QLen is specifically about CPU runnable pressure.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="etw-connection">How it connects to ETW</h2>
+        <ul>
+            <li>If QLen is high, you often see increased <span class="code">Ctx/s</span> and ETW <span class="code">cswitch</span> activity.</li>
+            <li>ETW (kernel scheduler events) can help you diagnose whether contention is due to CPU saturation, priority, interrupts/DPC, or an explosion of runnable threads.</li>
+        </ul>
+        <div class="small">See: <a href="etw_deep.html">ETW deep dive</a>.</div>
+    </div>
+
+</body>
+
+</html>

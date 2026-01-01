@@ -1,0 +1,443 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD>
+<meta name="GENERATOR" content="CCM">
+<!-- Index -->
+</HEAD>
+<BODY>
+<UL>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="CCM">
+      <param name="Local" value="index.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="help">
+      <param name="Local" value="index.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="metrics">
+      <param name="Local" value="metrics.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="PDH">
+      <param name="Local" value="metrics.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="perfmon">
+      <param name="Local" value="metrics.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="process table">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="processes">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="PID">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="kill process">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="copy">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="copy all rows">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="copy all visible rows">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Copy PID">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Copy Path">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="clipboard">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Ctrl+C">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="open file location">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Explorer">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="ownership">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="NT AUTHORITY">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="SYSTEM">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Secure System">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Registry">
+      <param name="Local" value="processes.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="QLen">
+      <param name="Local" value="qlen.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Processor Queue Length">
+      <param name="Local" value="qlen.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="troubleshooting">
+      <param name="Local" value="troubleshooting.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="N/A">
+      <param name="Local" value="troubleshooting.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="permissions">
+      <param name="Local" value="troubleshooting.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="driver threat model">
+      <param name="Local" value="driver_threat_model.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="driver roadmap">
+      <param name="Local" value="driver_mode_roadmap_amd.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="AMD roadmap">
+      <param name="Local" value="driver_mode_roadmap_amd.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="CPU pipeline">
+      <param name="Local" value="cpu_nuts_and_bolts.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="caches">
+      <param name="Local" value="cpu_nuts_and_bolts.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="SMT">
+      <param name="Local" value="cpu_nuts_and_bolts.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="GPU">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="DirectX">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="DXGI">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="WDDM">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="GPU tab">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="GPU Engine">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="GPU Adapter Memory">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="3D engine">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Copy engine">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Compute">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Video Decode">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Video Encode">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="graphics">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="VRAM">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="DisplayPort">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="HDMI">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="DVI">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="VGA">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="D-subminiature">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="D-Sub">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="DE-15">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="VGA connector">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="EDID">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="ray tracing">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="RT cores">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="BVH">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="AI acceleration">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="NPU">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="tensor cores">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="matrix cores">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="motherboard">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="fans">
+      <param name="Local" value="gpu_and_motherboard.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="sensor provider">
+      <param name="Local" value="power_and_temps.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="drivers">
+      <param name="Local" value="drivers_and_privileges.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="signing">
+      <param name="Local" value="drivers_and_privileges.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="IOCTL">
+      <param name="Local" value="drivers_and_privileges.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="power">
+      <param name="Local" value="power_and_temps.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="temperature">
+      <param name="Local" value="power_and_temps.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="SSE">
+      <param name="Local" value="isa_sse_avx_deep.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="AVX">
+      <param name="Local" value="isa_sse_avx_deep.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="ETW deep dive">
+      <param name="Local" value="etw_deep.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="memory">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Memory Compression">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="disks">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="RAM">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="ROM">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="BIOS">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="UEFI">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="EFI">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="CMOS">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="VRM">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="virtual memory">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="pagefile">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="commit">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="TLB">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="branch predictor">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="registers">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="cache">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="PCIe">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="NVMe">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="SATA">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="AHCI">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="TRIM">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="fragmentation">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="DDR">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="DDR5">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="timings">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="latency">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="DIMM">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="SO-DIMM">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="ECC">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="signal integrity">
+      <param name="Local" value="memory_and_disks.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="ISA">
+      <param name="Local" value="isa.html">
+    </OBJECT>
+  <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="ETW">
+      <param name="Local" value="etw.html">
+    </OBJECT>
+</UL>
+</BODY>
+</HTML>

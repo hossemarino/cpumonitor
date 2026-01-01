@@ -1,0 +1,20 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "MinGW-UCRT64 (CCM app)",
+      "intelliSenseMode": "windows-gcc-x64",
+      "compilerPath": "C:/msys64/ucrt64/bin/gcc.exe",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "includePath": [
+        "${workspaceFolder}/src/**",
+        "${workspaceFolder}/help/**"
+      ],
+      "defines": [
+        "UNICODE",
+        "_UNICODE"
+      ]
+    }
+  ]
+}

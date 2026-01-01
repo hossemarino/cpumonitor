@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM Help</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>CCM (Const CPU Monitor) – Help</h1>
+        <div class="small">Win32 / C CPU monitor (htop-style). This help can be opened directly as HTML, or compiled
+            into a CHM.</div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#contents">Contents</a></li>
+            <li><a href="#quick-tips">Quick tips</a></li>
+            <li><a href="#chm">CHM</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            CCM, help, metrics, process table, memory, disks, GPU, VRAM, GPU Engine, GPU Adapter Memory, DirectX, DXGI, WDDM,
+            DisplayPort, HDMI, DVI, VGA, D-subminiature, D-Sub, DE-15,
+            ETW, ISA, SSE, AVX, troubleshooting, drivers, privileges, power, temperature
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="what-is">CCM: what it is and how it works</h2>
+        <ul>
+            <li><b>What it is:</b> a small Windows system monitor focused on CPU behavior (utilization, scheduling pressure, context switching) with a fast Direct2D/DirectWrite UI.</li>
+            <li><b>What it is not:</b> a full “hardware sensor suite” like HWiNFO by default. Many sensors (package power, real CPU package temp, motherboard fans) are not reliably available from standard user-mode APIs.</li>
+            <li><b>How it works:</b> CCM reads a mix of Windows APIs (PDH counters, ETW best-effort, PowrProf, WMI best-effort) on a periodic tick and renders a rolling history graph.</li>
+            <li><b>Best-effort rule:</b> if a counter/provider is missing or blocked by policy/privileges, CCM shows <span class="code">N/A</span> or 0 and keeps running.</li>
+        </ul>
+        <div class="small">
+            If you want deeper interpretation, start with <a href="metrics.html">Metrics reference</a>, then follow links into the deeper pages.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="contents">Contents</h2>
+        <ul>
+            <li><b>CCM overview</b>
+                <ul>
+                    <li><a href="metrics.html">Metrics reference (start here)</a></li>
+                    <li><a href="troubleshooting.html">Troubleshooting (N/A, 0 values, permissions)</a></li>
+                </ul>
+            </li>
+            <li><b>CPU monitoring</b>
+                <ul>
+                    <li><a href="cpu_nuts_and_bolts.html">CPU nuts &amp; bolts (pipeline/caches/SMT/power)</a></li>
+                    <li><a href="qlen.html">QLen (Processor Queue Length) explained</a></li>
+                    <li><a href="etw.html">ETW kernel tracing notes</a></li>
+                    <li><a href="etw_deep.html">ETW deep dive (kernel sessions, privileges, troubleshooting)</a></li>
+                </ul>
+            </li>
+            <li><b>Memory &amp; storage</b>
+                <ul>
+                    <li><a href="memory_and_disks.html">Memory &amp; disks (overview)</a></li>
+                </ul>
+            </li>
+            <li><b>Processes</b>
+                <ul>
+                    <li><a href="processes.html">Process table (detailed view)</a></li>
+                </ul>
+            </li>
+            <li><b>CPU instruction set (ISA)</b>
+                <ul>
+                    <li><a href="isa.html">Instruction set (ISA) reference</a></li>
+                    <li><a href="isa_sse_avx_deep.html">SSE / AVX deep dive</a></li>
+                </ul>
+            </li>
+            <li><b>Power, temperature, and sensors</b>
+                <ul>
+                    <li><a href="power_and_temps.html">Power &amp; temperature (why N/A happens)</a></li>
+                </ul>
+            </li>
+            <li><b>GPU &amp; motherboard</b>
+                <ul>
+                    <li><a href="gpu_and_motherboard.html">GPU &amp; motherboard monitoring</a></li>
+                </ul>
+            </li>
+            <li><b>Drivers, privileges, and safety (future expansion)</b>
+                <ul>
+                    <li><a href="drivers_and_privileges.html">Drivers &amp; privileges (kernel mode, signing, why drivers exist)</a></li>
+                    <li><a href="driver_mode_roadmap_amd.html">Driver-mode roadmap (AMD-first)</a></li>
+                    <li><a href="driver_threat_model.html">Driver threat model (future expansion)</a></li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="quick-tips">Quick tips</h2>
+        <ul>
+            <li>The UI runs continuously (~60 FPS) using Direct2D/DirectWrite.</li>
+            <li>Sampling for most counters happens ~4 times/sec; the history graph is a rolling window.</li>
+            <li>ETW: kernel tracing often requires Administrator. If ETW can’t start, ETW fields show as N/A/0 but the app still runs.</li>
+            <li>Pwr (W): many systems do not expose a PDH power meter. 0.0 W is common and usually means “no provider / not supported”.</li>
+            <li>Temp: WMI thermal zones frequently do not represent CPU package temperature; N/A is common.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="chm">CHM</h2>
+        <div>
+            If you compile this folder into a CHM, name it <span class="code">CCM.chm</span>.
+            The app will prefer opening <span class="code">help\CCM.chm</span> if it exists.
+        </div>
+    </div>
+</body>
+
+</html>

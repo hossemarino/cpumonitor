@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Process Table (Detailed View)</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Process Table (Detailed View)</h1>
+        <div class="small">What CCM shows in the process table, how it is sampled, and how to use sorting and actions.</div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#columns">Columns (what they mean)</a></li>
+            <li><a href="#cpu">How CPU% is computed</a></li>
+            <li><a href="#ui">Sorting, selection, scrolling</a></li>
+            <li><a href="#copy">Copy (tab-delimited)</a></li>
+            <li><a href="#actions">Actions (Copy / End Task / Kill Process)</a></li>
+            <li><a href="#ownership">Ownership &amp; system processes</a></li>
+            <li><a href="#limitations">Limitations / why fields can be empty</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            processes, PID, CPU%, working set, memory, owner, token, path, PSAPI, Toolhelp, GetProcessTimes, GetSystemTimes,
+            sorting, selection, scrolling, copy, clipboard, tab-delimited, Ctrl+C, WM_CLOSE, TerminateProcess, permissions, SeDebugPrivilege,
+            ownership, NT AUTHORITY, SYSTEM, Secure System, Registry, Memory Compression
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="overview">Overview</h2>
+        <p>
+            CCM shows a live process table similar to a simplified Task Manager view. It is designed to be fast and
+            "best-effort": it enumerates processes and then attempts to open each process to read extra details.
+            If access is denied, the row still appears but some columns will be empty or zero.
+        </p>
+        <ul>
+            <li><span class="code">PID</span> and <span class="code">Name</span> come from Windows process enumeration.</li>
+            <li><span class="code">CPU%</span> is computed by comparing per-process CPU time deltas vs system CPU time deltas.</li>
+            <li><span class="code">Mem(MB)</span> is the process Working Set (resident memory), not total committed memory.</li>
+            <li><span class="code">Owner</span> and <span class="code">Path</span> are best-effort (may be blank).</li>
+            <li><span class="code">Net(remote)</span> is best-effort (shows one established IPv4 remote endpoint if present).</li>
+        </ul>
+        <div class="small">
+            “Best-effort” here is deliberate: CCM avoids invasive techniques. You’ll see the broad system picture even when some per-process details are unavailable.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="columns">Columns (what they mean)</h2>
+        <ul>
+            <li><b>PID</b>: Windows Process ID. It is reused over time after a process exits.</li>
+            <li><b>CPU%</b>: CPU utilization for that process over the last sample interval (about 0.25s by default). Values are clamped to 0–100 for readability.</li>
+            <li><b>Mem(MB)</b>: Working Set in megabytes. This is the amount of physical memory currently resident for the process.</li>
+            <li><b>Owner</b>: User account (Domain\User) of the process token. Blank if token query is denied.</li>
+            <li><b>Net(remote)</b>: If the process owns an established TCP IPv4 connection to a non-loopback remote address, one endpoint is shown (best-effort).</li>
+            <li><b>Name</b>: Executable name from enumeration (for example <span class="code">firefox.exe</span>).</li>
+            <li><b>Path</b>: Full path of the executable (best-effort).</li>
+        </ul>
+        <div class="small">
+            Note on memory: Working Set answers “how much RAM is resident now?”. “Private bytes / commit” answers “how much memory the process has committed overall”. Task Manager can show multiple memory concepts; CCM currently focuses on Working Set.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="cpu">How CPU% is computed</h2>
+        <p>
+            CCM uses the standard Windows time accounting:
+        </p>
+        <ul>
+            <li>Per-process CPU time is read via <span class="code">GetProcessTimes()</span> (kernel + user time).</li>
+            <li>System CPU time is read via <span class="code">GetSystemTimes()</span> (kernel + user time).</li>
+            <li>CPU% is computed from deltas: <span class="code">(process_delta / system_delta) * 100</span>.</li>
+        </ul>
+        <p>
+            Notes:
+        </p>
+        <ul>
+            <li>The first sample after CCM starts will often show <span class="code">0.0</span> for many processes because there is no prior sample to compare against.</li>
+            <li>If CCM cannot open a process, it cannot read <span class="code">GetProcessTimes()</span>, so CPU% will remain 0.0 for that row.</li>
+            <li>Because system time aggregates across all CPUs, the result is a "share of total machine CPU" (0–100). It is not "one core equals 100".</li>
+        </ul>
+        <div class="small">
+            Practical implication: on a 16-thread machine, one fully loaded thread is roughly ~6.25% total CPU.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="ui">Sorting, selection, scrolling</h2>
+        <ul>
+            <li><b>Sort</b>: Left-click a column header to sort by that column. Clicking the same header again toggles ascending/descending.</li>
+            <li><b>Default</b>: CCM starts sorted by <b>CPU%</b> descending.</li>
+            <li><b>Select</b>: Left-click a row to select its PID (highlight).</li>
+            <li><b>Scroll</b>: Use the mouse wheel while the window is focused to scroll the process list.</li>
+            <li><b>Count</b>: The title shows <span class="code">[N running]</span> which is the number of processes enumerated in the last sample.</li>
+        </ul>
+        <h3>Stacked vs unstacked</h3>
+        <ul>
+            <li><b>Stacked</b> mode groups multi-process applications by executable name (for example browsers and Electron apps). The Name column shows a count like <span class="code">firefox.exe (12)</span>.</li>
+            <li><b>Unstacked</b> mode shows every PID (parent/child/subprocesses) as separate rows.</li>
+            <li>Toggle this in the menu: <b>View</b> → <b>Stack multi-process apps</b>.</li>
+            <li><b>Drill-in:</b> In stacked mode, left-click a grouped row (one with a count) to expand/collapse and show the member PIDs directly under the group.</li>
+        </ul>
+        <div class="small">
+            Tip: sort by <b>Name</b> when hunting a specific process; sort by <b>CPU%</b> or <b>Mem</b> when diagnosing load.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="copy">Copy (tab-delimited)</h2>
+        <p>
+            CCM can copy process information to the clipboard.
+            For table copies, the copied text includes a header line so you can paste directly into Excel, Google Sheets, or a text editor.
+        </p>
+        <ul>
+            <li><b>Copy row:</b> right-click a row → <b>Copy</b></li>
+            <li><b>Copy all visible rows:</b> right-click a row → <b>Copy all visible rows</b></li>
+            <li><b>Copy all rows:</b> right-click a row → <b>Copy all rows</b></li>
+            <li><b>Copy shortcut:</b> select a row, then press <span class="code">Ctrl+C</span> (copies the selected row)</li>
+            <li><b>Copy PID only:</b> right-click a row → <b>Copy PID only</b></li>
+            <li><b>Copy Path only:</b> right-click a row → <b>Copy Path only</b> (only available when the Path column is available)</li>
+        </ul>
+        <div class="small">Table format: <span class="code">PID\tCPU%\tMem(MB)\tOwner\tNet(remote)\tName\tPath</span> followed by one row per process.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="actions">Actions (Copy / End Task / Kill Process)</h2>
+        <p>
+            CCM provides best-effort actions via the process table context menu (right-click a process row):
+        </p>
+        <ul>
+            <li><b>Copy</b>: copies a tab-delimited header + row to the clipboard.</li>
+            <li><b>Copy all visible rows</b>: copies a tab-delimited header + one line per currently visible row.</li>
+            <li><b>Copy all rows</b>: copies a tab-delimited header + one line per process in the table.</li>
+            <li><b>Copy PID only</b>: copies just the PID value.</li>
+            <li><b>Copy Path only</b>: copies just the executable path (if available).</li>
+            <li><b>Open file location</b>: opens Windows Explorer and selects the executable on disk (requires the Path column to be available).</li>
+            <li><b>End Task (close window)</b>: Enumerates top-level windows for the selected PID and sends <span class="code">WM_CLOSE</span>. This is the gentlest option, but it only works for GUI apps that have a window.</li>
+            <li><b>Kill Process</b>: Calls <span class="code">TerminateProcess()</span>. This is forceful and may cause data loss. It may fail with "access denied" for protected/system processes.</li>
+        </ul>
+        <div class="small">
+            Safety UX: actions that require a valid PID or a valid Path are disabled when CCM does not have the required information.
+            Kill Process prompts with the process name + PID.
+            In <b>stacked</b> mode, End Task / Kill Process apply to <b>all member PIDs</b> in the selected group.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="ownership">Ownership &amp; system processes</h2>
+        <p>
+            The <b>Owner</b> column is the user identity attached to the process token (best-effort).
+            It often appears as <span class="code">DOMAIN\User</span>, but many Windows components run under built-in service accounts.
+        </p>
+        <h3>What <span class="code">NT AUTHORITY\...</span> means</h3>
+        <ul>
+            <li><b>NT AUTHORITY</b> is a Windows namespace for built-in local accounts (not a domain).</li>
+            <li><b>NT AUTHORITY\SYSTEM</b> (often shown as <b>System</b>): the highest-privilege local account used by the OS.</li>
+            <li><b>NT AUTHORITY\LOCAL SERVICE</b>: a low-privilege built-in account for services; it presents anonymous credentials to the network by default.</li>
+            <li><b>NT AUTHORITY\NETWORK SERVICE</b>: a low-privilege built-in account for services; it presents the machine account to the network.</li>
+        </ul>
+        <h3>Common “special” Windows processes you may see</h3>
+        <ul>
+            <li><b>System</b> (often PID 4): a kernel/system process placeholder. It is not a normal user-mode EXE and may not have a file path.</li>
+            <li><b>Secure System</b>: used by security features like Virtualization-Based Security (VBS) / Credential Guard. It is typically protected and may not expose details.</li>
+            <li><b>Registry</b>: a kernel/system process placeholder representing registry activity. It is protected and does not correspond to a normal on-disk executable.</li>
+        </ul>
+        <div class="small">
+            Practical note: for protected/system processes, it is normal for CCM to show blank <b>Owner</b>/<b>Path</b> and disable path-based actions.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="limitations">Limitations / why fields can be empty</h2>
+        <ul>
+            <li><b>Permissions</b>: Many system/protected processes cannot be opened without elevated rights. Those rows may have blank Owner/Path and 0 CPU/Mem.</li>
+            <li><b>Network</b>: Only established TCP IPv4 connections are currently inspected, and only one remote endpoint is shown per PID (best-effort).</li>
+            <li><b>Timing</b>: CPU% is interval-based; quick processes may appear briefly or show 0.0.</li>
+        </ul>
+        <p>
+            If a process appears in Task Manager but not in CCM, check whether CCM is showing the full process count
+            (for example ~346). If it is, the process should be present somewhere in the list; sort by <b>Name</b>
+            to make it easier to find.
+        </p>
+        <div class="small">
+            Advanced: running elevated and enabling SeDebugPrivilege can improve visibility into protected processes, but that also increases what the app is allowed to do. CCM defaults to the safer approach.
+        </div>
+    </div>
+</body>
+
+</html>

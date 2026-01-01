@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – GPU &amp; motherboard monitoring</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>GPU &amp; motherboard monitoring</h1>
+        <div class="small"><a href="index.html">Back to contents</a> · <a href="power_and_temps.html">Power &amp; temperature</a> · <a href="drivers_and_privileges.html">Drivers &amp; privileges</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#goal">Goal</a></li>
+            <li><a href="#gpu-tab">GPU tab (current implementation)</a></li>
+            <li><a href="#gpu-telemetry">GPU telemetry (DXGI + PDH) in depth</a></li>
+            <li><a href="#gpu-why-missing">Why some GPU fields are missing</a></li>
+            <li><a href="#apis">Graphics APIs &amp; data sources</a></li>
+            <li><a href="#directx">What is DirectX?</a></li>
+            <li><a href="#display">Analog/digital display interfaces</a></li>
+            <li><a href="#gpu">GPU monitoring (what’s realistic)</a></li>
+            <li><a href="#gpu-meaning">What GPU metrics mean</a></li>
+            <li><a href="#vram">VRAM / memory model (dGPU vs iGPU)</a></li>
+            <li><a href="#ai">AI acceleration (GPU, NPU, “AI chips”)</a></li>
+            <li><a href="#rt">Ray tracing (practical mental model)</a></li>
+            <li><a href="#amd-nv">AMD vs NVIDIA (high-level differences)</a></li>
+            <li><a href="#board">Motherboard monitoring (why it’s hard)</a></li>
+            <li><a href="#architecture">Recommended architecture (provider boundary)</a></li>
+            <li><a href="#phases">Phased roadmap</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            GPU, graphics, VRAM, WDDM, DXGI, DirectX, Direct3D, Vulkan, OpenGL, utilization, engines, 3D, compute, video decode, copy engine,
+            display, monitor, D-subminiature, D-Sub, DE-15, VGA, SVGA, XGA, DVI, HDMI, DisplayPort, DP, USB-C, Thunderbolt, EDID,
+            temperature, power, fan RPM,
+            ray tracing, RT cores, BVH, denoising, tensor cores, matrix cores, NPU,
+            motherboard, EC, SMBus, sensor chip, provider, driver, roadmap
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="goal">Goal</h2>
+        <ul>
+            <li>Keep CCM’s main EXE <b>safe and driver-free by default</b>, while making it possible to show richer “HWiNFO-like” readings when available.</li>
+            <li>Be honest about reliability: if a value is not available on the current machine/configuration, show <span class="code">N/A</span> and keep running.</li>
+            <li>Avoid dangerous control surfaces: the focus is <b>read-only telemetry</b> (no fan curves, no voltage writes, no overclocking).</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="gpu-tab">GPU tab (current implementation)</h2>
+        <div class="small">
+            CCM’s GPU tab is intentionally “OS-first”: it uses Windows facilities that are commonly available on modern systems.
+            Vendor-specific telemetry (temps/power/fans) remains optional and belongs behind the provider boundary.
+        </div>
+
+        <h3>What CCM reads today</h3>
+        <ul>
+            <li><b>Adapter identity (DXGI):</b> adapter name, vendor ID, and total dedicated/shared memory sizes.</li>
+            <li><b>Per-engine utilization (PDH):</b> the <span class="code">GPU Engine</span> performance counters aggregated by engine type (e.g. <span class="code">3D</span>, <span class="code">Copy</span>, <span class="code">Compute_0</span>, <span class="code">VideoDecode</span>).</li>
+            <li><b>Dedicated/shared memory usage (PDH):</b> the <span class="code">GPU Adapter Memory</span> performance counters (usage/limit).</li>
+        </ul>
+
+        <h3>How the tab behaves</h3>
+        <ul>
+            <li>It is <b>best-effort</b>: if counters are missing, values show as <span class="code">N/A</span> (or graphs stay at 0) and CCM keeps running.</li>
+            <li>It currently targets the “primary” adapter by a simple heuristic (highest dedicated VRAM).</li>
+            <li>It graphs a subset of engine types when there isn’t enough vertical space (to keep the process table usable).</li>
+        </ul>
+
+        <h3>What is intentionally not in the main EXE (yet)</h3>
+        <ul>
+            <li><b>Temperature / hotspot / memory junction</b></li>
+            <li><b>Power (W), voltage, current</b></li>
+            <li><b>Fan RPM, fan curves</b></li>
+            <li><b>PCIe link speed/width and other board telemetry</b></li>
+        </ul>
+        <div class="small">
+            Those are “vendor-ish” and belong behind the provider boundary described later on this page.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="gpu-telemetry">GPU telemetry (DXGI + PDH) in depth</h2>
+        <div class="small">
+            This section explains what CCM’s GPU numbers mean and what they <b>do not</b> mean. The core idea is:
+            Windows exposes a set of <b>WDDM</b>-provided performance counters for GPU engines and GPU memory. CCM reads those counters via <b>PDH</b>
+            and uses <b>DXGI</b> to identify the adapter and its memory sizes.
+        </div>
+
+        <h3>Adapter identity (DXGI)</h3>
+        <ul>
+            <li><b>Adapter name:</b> the friendly name from the display driver (useful for identifying the GPU).</li>
+            <li><b>Vendor ID:</b> PCI vendor identifier (helps distinguish Intel/AMD/NVIDIA).</li>
+            <li><b>Dedicated/Shared totals:</b> a capacity hint (not a live “usage” number).</li>
+        </ul>
+        <div class="small">
+            Note: on laptops/hybrid systems, the “primary” adapter is not always the one doing heavy work.
+            CCM currently chooses the adapter with the highest dedicated VRAM as a pragmatic default.
+        </div>
+
+        <h3>GPU memory usage (PDH “GPU Adapter Memory”)</h3>
+        <table>
+            <tr><th>Counter</th><th>What it represents</th><th>CCM display</th></tr>
+            <tr>
+                <td class="code">Dedicated Usage</td>
+                <td>Best-effort dedicated GPU memory currently in use for the adapter.</td>
+                <td>Dedicated used (MB) history graph</td>
+            </tr>
+            <tr>
+                <td class="code">Dedicated Limit</td>
+                <td>The current effective dedicated memory limit for the adapter.</td>
+                <td>Used as scale/label for the dedicated graph (when available)</td>
+            </tr>
+            <tr>
+                <td class="code">Shared Usage</td>
+                <td>Best-effort shared (system) memory currently in use by the GPU.</td>
+                <td>Shared used (MB) history graph</td>
+            </tr>
+            <tr>
+                <td class="code">Shared Limit</td>
+                <td>The current effective shared memory limit for the adapter.</td>
+                <td>Used as scale/label for the shared graph (when available)</td>
+            </tr>
+        </table>
+        <div class="small">
+            Practical interpretation:
+            <b>dGPU</b> systems tend to make “Dedicated used” meaningful for gaming/graphics pressure.
+            <b>iGPU</b> systems can show large “Shared” behavior because the GPU uses system RAM.
+        </div>
+
+        <h3>GPU utilization (PDH “GPU Engine”)</h3>
+        <div class="small">
+            The Windows GPU “engine” model splits work into engines like 3D, copy (DMA), video decode/encode, and one or more compute engines.
+            The PDH counter reports <b>Utilization Percentage</b> per engine context.
+        </div>
+        <ul>
+            <li><b>Engine types:</b> PDH instance names commonly include an <span class="code">engtype_...</span> token (for example <span class="code">engtype_3D</span> or <span class="code">engtype_Copy</span>).</li>
+            <li><b>CCM aggregation:</b> CCM groups many counters by engine type and produces one graph per type. This is why you may see <span class="code">Compute_0</span> as one line even if the driver exposes multiple compute contexts.</li>
+            <li><b>Percent semantics:</b> it’s a time-based “busy” percentage over a sampling window, not a clock rate and not a direct “performance” score.</li>
+            <li><b>Not all engines exist:</b> depending on the GPU and driver, you may never see some engine types (or you may see extra ones).</li>
+        </ul>
+        <div class="small">
+            Why the numbers can look odd:
+            engine counters can be provided per-process, per-context, and per-hardware engine.
+            When you aggregate them, you are choosing an interpretation.
+            CCM’s choice is: <b>simple and stable</b> (group by engine type), best-effort, and never crash.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="gpu-why-missing">Why some GPU fields are missing (and why Task Manager can show “more”)</h2>
+        <ul>
+            <li><b>Some values are not standardized in Windows user mode.</b> GPU temperature, hotspot, VRAM junction temperature, fan RPM, and board power are typically vendor-specific.</li>
+            <li><b>Some values require privileged access or a vendor service.</b> Even if a GPU can report it, the path might be a vendor kernel driver + a user-mode service + a private API.</li>
+            <li><b>Task Manager is part of Windows.</b> It can rely on OS integration points and internal telemetry plumbing that third-party apps shouldn’t depend on (because it can change across releases).</li>
+            <li><b>Hybrid/multi-GPU complicates attribution.</b> The “GPU doing the work” can change depending on the process, power mode, and display routing.</li>
+        </ul>
+        <div class="small">
+            CCM’s approach is intentionally conservative:
+            use stable public APIs (DXGI + PDH) for “OS-ish” utilization/memory and keep “vendor-ish” telemetry (temps/power/fans) behind an optional external provider.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="apis">Graphics APIs &amp; data sources (what they are for)</h2>
+        <table>
+            <tr><th>Name</th><th>What it is</th><th>Why it matters for monitoring</th></tr>
+            <tr>
+                <td><b>WDDM</b></td>
+                <td>Windows Display Driver Model: the driver model for GPUs on Windows.</td>
+                <td>Most OS-visible GPU usage/memory telemetry is ultimately rooted in WDDM.</td>
+            </tr>
+            <tr>
+                <td><b>DXGI</b></td>
+                <td>DirectX Graphics Infrastructure: adapter enumeration, outputs, swap chains, and the bridge between user apps and the graphics stack.</td>
+                <td>Good for identifying the adapter (name/vendor IDs/memory sizes) in a stable way.</td>
+            </tr>
+            <tr>
+                <td><b>PDH</b></td>
+                <td>Performance Data Helper: the API used to query Windows performance counters (perfmon).</td>
+                <td>How CCM reads <span class="code">GPU Engine</span> and <span class="code">GPU Adapter Memory</span> counters.</td>
+            </tr>
+            <tr>
+                <td><b>ETW</b></td>
+                <td>Event Tracing for Windows: high-volume tracing used for diagnostics and performance analysis.</td>
+                <td>Can expose fine-grain scheduling/driver events, but is privilege/policy-sensitive and can be complex to interpret.</td>
+            </tr>
+            <tr>
+                <td><b>WMI</b></td>
+                <td>Windows Management Instrumentation: a generic management query system.</td>
+                <td>Often unreliable for low-level GPU telemetry; good for inventory/config on some systems.</td>
+            </tr>
+            <tr>
+                <td><b>Vendor APIs</b></td>
+                <td>Vendor-provided telemetry/control interfaces (sometimes via a vendor service/driver).</td>
+                <td>Common path for temps/power/fans and detailed board telemetry; semantics vary by vendor and model.</td>
+            </tr>
+        </table>
+        <div class="small">
+            CCM’s philosophy: OS-first in the main EXE, vendor-ish behind an optional provider. This keeps the core app simple and safe.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="directx">What is DirectX?</h2>
+        <div class="small">
+            <b>DirectX</b> is a family of Windows multimedia APIs for graphics, compute, audio, and input.
+            The most commonly referenced part today is <b>Direct3D</b> (3D graphics) and related components.
+        </div>
+        <ul>
+            <li><b>Direct3D (D3D):</b> the 3D rendering API (D3D11/D3D12 are the modern versions). Games/apps use this to talk to the GPU for rendering and compute.</li>
+            <li><b>DXGI:</b> the “plumbing” around the GPU (adapters, outputs, swap chains). It’s used by both apps and the OS graphics stack.</li>
+            <li><b>DirectCompute:</b> GPU compute through the Direct3D stack (conceptually “compute shaders”).</li>
+            <li><b>DXVA / media blocks:</b> hardware-accelerated video decode/encode is commonly exposed through media/DirectX-related paths and shows up as separate engines.</li>
+        </ul>
+        <div class="small">
+            Monitoring implication: when an application is “using the GPU”, it might be using 3D, compute, copy, or video engines.
+            “GPU usage” without an engine label is often ambiguous.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="display">Analog/digital display interfaces (VGA, DVI, HDMI, DP, SCART, …)</h2>
+        <div class="small">
+            This is a practical overview, focused on what the names mean. There are three layers that often get mixed up:
+            <b>(1) the physical connector</b>, <b>(2) the link protocol</b>, and <b>(3) the pixel encoding/color format</b>.
+        </div>
+
+        <h3>Common PC-era connectors (quick mental model)</h3>
+        <table>
+            <tr><th>Interface</th><th>Analog or digital?</th><th>Notes</th></tr>
+            <tr>
+                <td><b>VGA</b></td>
+                <td>Analog</td>
+                <td>Older PC connector; quality depends heavily on cable/analog DAC, susceptible to noise/blur. No native audio.</td>
+            </tr>
+            <tr>
+                <td><b>DVI</b></td>
+                <td>Digital (DVI-D) or mixed (DVI-I)</td>
+                <td>DVI-D carries digital video; DVI-I can carry both digital and analog. Audio is not standard. Single-link vs dual-link affects max pixel clock.</td>
+            </tr>
+            <tr>
+                <td><b>HDMI</b></td>
+                <td>Digital</td>
+                <td>Common TV/monitor connector. Carries audio and supports HDCP content protection. Often uses the TMDS-style signaling family.</td>
+            </tr>
+            <tr>
+                <td><b>DisplayPort (DP)</b></td>
+                <td>Digital</td>
+                <td>Common PC monitor connector. Packet-based link, supports audio, Multi‑Stream Transport (MST), and is widely used for high refresh/resolution setups.</td>
+            </tr>
+            <tr>
+                <td><b>USB‑C (DP Alt Mode / Thunderbolt)</b></td>
+                <td>Digital</td>
+                <td>The connector is USB‑C, but display output is commonly DisplayPort “alt mode” tunneled over USB‑C, or Thunderbolt tunneling. Capabilities depend on the device and cable.</td>
+            </tr>
+            <tr>
+                <td><b>D‑subminiature (D‑Sub)</b></td>
+                <td>Usually analog in display contexts</td>
+                <td>
+                    A family of connectors (many pin counts). The classic “VGA connector” is actually a <b>DE‑15</b> D‑Sub.
+                    D‑Sub also appears in older serial/parallel ports and various industrial/video adapters.
+                </td>
+            </tr>
+        </table>
+
+        <h3>D‑subminiature (D‑Sub): what it is</h3>
+        <ul>
+            <li><b>D‑Sub is a connector family, not a signal standard.</b> You’ll see DB‑9/DE‑9 (serial), DB‑25 (parallel/RS‑232 variants), and <b>DE‑15</b> for VGA video.</li>
+            <li><b>Why it existed:</b> robust mechanical connector, screws for retention, and enough pins to carry multiple signals.</li>
+            <li><b>How it relates to VGA:</b> the “VGA connector” is a DE‑15 carrying an <b>analog RGB</b> signal plus sync and a small management channel (DDC).</li>
+        </ul>
+
+        <h3>VGA-era naming: VGA, SVGA, XGA (what these mean)</h3>
+        <div class="small">
+            These are <b>display modes / resolution families</b>, not different connectors. They’re often casually used to describe “the VGA era”.
+        </div>
+        <table>
+            <tr><th>Name</th><th>Typical resolution</th><th>Notes</th></tr>
+            <tr><td><b>VGA</b></td><td>640×480</td><td>Original common PC baseline, typically 60 Hz but can vary.</td></tr>
+            <tr><td><b>SVGA</b></td><td>800×600</td><td>“Super VGA”: umbrella term that evolved as monitors improved.</td></tr>
+            <tr><td><b>XGA</b></td><td>1024×768</td><td>Very common in early LCD/projector era.</td></tr>
+            <tr><td><b>SXGA</b></td><td>1280×1024</td><td>Common 5:4 LCD era mode.</td></tr>
+            <tr><td><b>UXGA</b></td><td>1600×1200</td><td>High-end CRT/LCD era mode; requires higher pixel clocks.</td></tr>
+        </table>
+
+        <h3>Why higher refresh rates are harder (bandwidth in plain English)</h3>
+        <ul>
+            <li><b>Refresh rate scales bandwidth linearly.</b> Double the Hz (at the same resolution and color depth) roughly doubles the data rate.</li>
+            <li><b>Resolution also scales bandwidth linearly.</b> More pixels per frame means more data per second.</li>
+            <li><b>Links have overhead.</b> Digital links use encodings and framing (e.g. TMDS, 8b/10b, 128b/132b, FRL), so “raw Gbps” is not all usable for pixels.</li>
+            <li><b>Cables matter.</b> Higher rates need better signal integrity; not every cable is rated for every generation.</li>
+            <li><b>Compression exists.</b> Display Stream Compression (DSC) can allow higher resolution/refresh within the same physical link, if both sides support it.</li>
+        </ul>
+
+        <h3>Pinouts and signal roles (computer display connectors)</h3>
+        <div class="small">
+            Below are practical pinout summaries for the common PC display connectors. Pin numbering is per the standard connector orientation.
+            This is intended as a learning/diagnostic reference (not a repair guide).
+        </div>
+
+        <h4>VGA (DE‑15 / “HD‑15”) pinout</h4>
+        <table>
+            <tr><th>Pin</th><th>Signal</th><th>What it does</th></tr>
+            <tr><td class="code">1</td><td>Red</td><td>Analog red video channel.</td></tr>
+            <tr><td class="code">2</td><td>Green</td><td>Analog green video channel.</td></tr>
+            <tr><td class="code">3</td><td>Blue</td><td>Analog blue video channel.</td></tr>
+            <tr><td class="code">4</td><td>ID2 / Reserved</td><td>Historically monitor ID / reserved; often unused on modern equipment.</td></tr>
+            <tr><td class="code">5</td><td>GND</td><td>Signal ground.</td></tr>
+            <tr><td class="code">6</td><td>Red return</td><td>Ground/return for red channel.</td></tr>
+            <tr><td class="code">7</td><td>Green return</td><td>Ground/return for green channel.</td></tr>
+            <tr><td class="code">8</td><td>Blue return</td><td>Ground/return for blue channel.</td></tr>
+            <tr><td class="code">9</td><td>+5V</td><td>Power for DDC/EDID circuitry (not for powering a monitor).</td></tr>
+            <tr><td class="code">10</td><td>Sync GND</td><td>Ground reference for sync signals.</td></tr>
+            <tr><td class="code">11</td><td>ID0 / Reserved</td><td>Historically monitor ID / reserved; often unused.</td></tr>
+            <tr><td class="code">12</td><td>DDC SDA</td><td>I²C data line for monitor identification (EDID).</td></tr>
+            <tr><td class="code">13</td><td>HSync</td><td>Horizontal sync pulse (timing for each scan line).</td></tr>
+            <tr><td class="code">14</td><td>VSync</td><td>Vertical sync pulse (timing for each frame).</td></tr>
+            <tr><td class="code">15</td><td>DDC SCL</td><td>I²C clock line for EDID.</td></tr>
+        </table>
+        <div class="small">
+            Why VGA can struggle at high refresh/resolution:
+            it’s analog, so signal quality depends on the DAC, cable, impedance matching, and noise.
+            High pixel clocks require very clean analog bandwidth.
+        </div>
+
+        <h4>DVI pinout (summary, by signal groups)</h4>
+        <div class="small">
+            DVI has many pins and variants. Rather than listing every physical pin number (which differs by variant and can be hard to read in HTML),
+            this table explains <b>what the pin groups do</b>, which is the useful part for understanding capabilities.
+        </div>
+        <table>
+            <tr><th>Variant</th><th>Signals present</th><th>What that means</th></tr>
+            <tr>
+                <td><b>DVI‑D</b></td>
+                <td>Digital only: TMDS data/clock pairs + DDC + power/grounds</td>
+                <td>Connects to digital monitors. No analog VGA signal on the extra pins.</td>
+            </tr>
+            <tr>
+                <td><b>DVI‑I</b></td>
+                <td>Digital TMDS + analog RGB pins</td>
+                <td>Can drive digital displays and (with a passive adapter) VGA analog displays.</td>
+            </tr>
+            <tr>
+                <td><b>Single‑link</b></td>
+                <td>One TMDS link</td>
+                <td>Common max pixel clock is ~165 MHz, typically enough for 1920×1080 @ 60 Hz (timing dependent).</td>
+            </tr>
+            <tr>
+                <td><b>Dual‑link</b></td>
+                <td>Two TMDS links (extra data pairs)</td>
+                <td>Roughly doubles TMDS bandwidth (common max pixel clock ~330 MHz), enabling higher resolution/refresh on older panels.</td>
+            </tr>
+        </table>
+        <div class="small">
+            DVI digital signaling is TMDS (similar family to classic HDMI). Higher refresh rates require higher TMDS clock rates and better cables.
+        </div>
+
+        <h4>HDMI (Type A, 19‑pin) pinout</h4>
+        <table>
+            <tr><th>Pin</th><th>Signal</th><th>What it does</th></tr>
+            <tr><td class="code">1</td><td>TMDS Data2+</td><td>Digital video/audio data lane 2 (positive).</td></tr>
+            <tr><td class="code">2</td><td>TMDS Data2 Shield</td><td>Shield/ground for lane 2.</td></tr>
+            <tr><td class="code">3</td><td>TMDS Data2−</td><td>Lane 2 (negative).</td></tr>
+            <tr><td class="code">4</td><td>TMDS Data1+</td><td>Lane 1 (positive).</td></tr>
+            <tr><td class="code">5</td><td>TMDS Data1 Shield</td><td>Shield/ground for lane 1.</td></tr>
+            <tr><td class="code">6</td><td>TMDS Data1−</td><td>Lane 1 (negative).</td></tr>
+            <tr><td class="code">7</td><td>TMDS Data0+</td><td>Lane 0 (positive).</td></tr>
+            <tr><td class="code">8</td><td>TMDS Data0 Shield</td><td>Shield/ground for lane 0.</td></tr>
+            <tr><td class="code">9</td><td>TMDS Data0−</td><td>Lane 0 (negative).</td></tr>
+            <tr><td class="code">10</td><td>TMDS Clock+</td><td>TMDS clock (positive) for classic TMDS modes.</td></tr>
+            <tr><td class="code">11</td><td>TMDS Clock Shield</td><td>Shield/ground for clock.</td></tr>
+            <tr><td class="code">12</td><td>TMDS Clock−</td><td>TMDS clock (negative).</td></tr>
+            <tr><td class="code">13</td><td>CEC</td><td>Consumer Electronics Control (device control over HDMI).</td></tr>
+            <tr><td class="code">14</td><td>HEAC / ARC</td><td>Ethernet/Audio Return Channel (implementation depends on HDMI version and device).</td></tr>
+            <tr><td class="code">15</td><td>DDC SCL</td><td>I²C clock for EDID/HDCP handshake.</td></tr>
+            <tr><td class="code">16</td><td>DDC SDA</td><td>I²C data for EDID/HDCP handshake.</td></tr>
+            <tr><td class="code">17</td><td>GND</td><td>Ground for DDC/CEC.</td></tr>
+            <tr><td class="code">18</td><td>+5V</td><td>5V power for sink detection/EDID circuitry (not for powering a monitor).</td></tr>
+            <tr><td class="code">19</td><td>Hot Plug Detect</td><td>Indicates display is connected/ready; used for link negotiation.</td></tr>
+        </table>
+
+        <h4>DisplayPort (full-size, 20‑pin) pinout</h4>
+        <table>
+            <tr><th>Pin</th><th>Signal</th><th>What it does</th></tr>
+            <tr><td class="code">1</td><td>ML_Lane0+</td><td>Main Link lane 0 (positive).</td></tr>
+            <tr><td class="code">2</td><td>GND</td><td>Ground.</td></tr>
+            <tr><td class="code">3</td><td>ML_Lane0−</td><td>Main Link lane 0 (negative).</td></tr>
+            <tr><td class="code">4</td><td>ML_Lane1+</td><td>Main Link lane 1 (positive).</td></tr>
+            <tr><td class="code">5</td><td>GND</td><td>Ground.</td></tr>
+            <tr><td class="code">6</td><td>ML_Lane1−</td><td>Main Link lane 1 (negative).</td></tr>
+            <tr><td class="code">7</td><td>ML_Lane2+</td><td>Main Link lane 2 (positive).</td></tr>
+            <tr><td class="code">8</td><td>GND</td><td>Ground.</td></tr>
+            <tr><td class="code">9</td><td>ML_Lane2−</td><td>Main Link lane 2 (negative).</td></tr>
+            <tr><td class="code">10</td><td>ML_Lane3+</td><td>Main Link lane 3 (positive).</td></tr>
+            <tr><td class="code">11</td><td>GND</td><td>Ground.</td></tr>
+            <tr><td class="code">12</td><td>ML_Lane3−</td><td>Main Link lane 3 (negative).</td></tr>
+            <tr><td class="code">13</td><td>CONFIG1</td><td>Configuration / cable/adapter detect (used with AUX/HPD logic).</td></tr>
+            <tr><td class="code">14</td><td>CONFIG2</td><td>Configuration / cable/adapter detect.</td></tr>
+            <tr><td class="code">15</td><td>AUX CH+</td><td>Auxiliary channel (management/control) positive.</td></tr>
+            <tr><td class="code">16</td><td>GND</td><td>Ground.</td></tr>
+            <tr><td class="code">17</td><td>AUX CH−</td><td>Auxiliary channel negative.</td></tr>
+            <tr><td class="code">18</td><td>Hot Plug Detect</td><td>Display presence/ready signal.</td></tr>
+            <tr><td class="code">19</td><td>DP_PWR</td><td>3.3V power (limited) for active adapters/accessories.</td></tr>
+            <tr><td class="code">20</td><td>GND</td><td>Ground.</td></tr>
+        </table>
+        <div class="small">
+            DisplayPort is packet-based. It negotiates link rate and lane count, which is why it scales well to higher refresh/resolutions.
+            The AUX channel carries management traffic (including reading EDID-like data and link training).
+        </div>
+
+        <h4>USB‑C (24‑pin) pinout (display‑relevant view)</h4>
+        <div class="small">
+            USB‑C is reversible: many pins are duplicated as “A-side” and “B-side”.
+            For display output, the key concept is <b>Alternate Mode</b> (commonly DisplayPort Alt Mode) and/or <b>Thunderbolt</b> tunneling.
+            Exact routing depends on the host, cable, dock, and monitor.
+        </div>
+        <table>
+            <tr><th>Pins</th><th>Signal</th><th>What it does</th></tr>
+            <tr><td class="code">A1, A12, B1, B12</td><td>GND</td><td>Ground return.</td></tr>
+            <tr><td class="code">A4, A9, B4, B9</td><td>VBUS</td><td>Power (5–20V depending on USB Power Delivery negotiation).</td></tr>
+            <tr><td class="code">A5</td><td>CC1</td><td>Configuration Channel: orientation, role (host/device), and USB‑PD negotiation.</td></tr>
+            <tr><td class="code">B5</td><td>CC2</td><td>Configuration Channel for the flipped orientation.</td></tr>
+            <tr><td class="code">A6/A7, B6/B7</td><td>D+/D−</td><td>USB 2.0 data (often present even when DP Alt Mode is used).</td></tr>
+            <tr><td class="code">A2/A3, B2/B3</td><td>TX/RX SuperSpeed pairs</td><td>High-speed differential pairs used for USB 3.x and can be repurposed as DP lanes in DP Alt Mode.</td></tr>
+            <tr><td class="code">A8</td><td>SBU1</td><td>Sideband Use: used by some alt-modes and adapter signaling (varies).</td></tr>
+            <tr><td class="code">B8</td><td>SBU2</td><td>Sideband Use counterpart.</td></tr>
+        </table>
+        <div class="small">
+            Why USB‑C display capabilities vary so much:
+            the same connector can carry different protocols depending on negotiation.
+            Some modes sacrifice USB 3.x bandwidth to allocate more DP lanes (or vice versa).
+        </div>
+
+        <h3>Generations and subtypes (what changes over the years)</h3>
+        <table>
+            <tr><th>Standard</th><th>Key generations (simplified)</th><th>Why it affects resolution/refresh</th></tr>
+            <tr>
+                <td><b>VGA (analog)</b></td>
+                <td>Improves with DAC quality + cable + monitor electronics (no single “version”)</td>
+                <td>Analog bandwidth and noise dominate at higher pixel clocks.</td>
+            </tr>
+            <tr>
+                <td><b>DVI</b></td>
+                <td>Single‑link vs Dual‑link; DVI‑D vs DVI‑I</td>
+                <td>TMDS pixel clock limits determine maximum timing; dual‑link provides more bandwidth.</td>
+            </tr>
+            <tr>
+                <td><b>HDMI</b></td>
+                <td>HDMI 1.4 → 2.0 → 2.1 (TMDS to FRL at 2.1)</td>
+                <td>Higher link bandwidth enables higher pixel rates; HDMI 2.1’s FRL increases throughput and often pairs with DSC for very high modes.</td>
+            </tr>
+            <tr>
+                <td><b>DisplayPort</b></td>
+                <td>DP 1.1/1.2/1.4 (common) → DP 2.0/2.1 (UHBR rates)</td>
+                <td>Negotiated link rate + lane count + efficient encoding and DSC support scale to high refresh/resolution.</td>
+            </tr>
+            <tr>
+                <td><b>USB‑C</b></td>
+                <td>DP Alt Mode versions track DP; Thunderbolt 3/4 tunneling variants</td>
+                <td>Capability depends on negotiated mode and how many high-speed lanes are allocated to DP vs USB data.</td>
+            </tr>
+        </table>
+
+        <h3>Why this matters for monitoring</h3>
+        <ul>
+            <li><b>Connector != performance counter.</b> GPU utilization/memory counters don’t directly tell you what cable is used.</li>
+            <li><b>Laptops are special.</b> Internal panels usually use eDP (embedded DisplayPort). External ports may be wired to the iGPU, dGPU, or a mux; it can change behavior and which adapter is “active”.</li>
+            <li><b>Adapters and converters exist.</b> DP-to-HDMI, USB‑C hubs, capture devices, and docks can change what the OS reports and how the link is negotiated.</li>
+            <li><b>EDID is the identity card.</b> Monitors advertise capabilities through EDID/DisplayID. Windows can often read it, but reporting varies across drivers and connection paths.</li>
+        </ul>
+        <div class="small">
+            CCM does not currently attempt to enumerate “active connector types” or link rates. That is possible in principle through deeper display APIs,
+            but it is separate from the core goal of a lightweight utilization monitor.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="gpu">GPU monitoring (what’s realistic)</h2>
+        <div class="small">
+            GPUs are generally easier than “motherboard sensors”, but still split into two categories: (1) OS-exposed usage/memory stats, and
+            (2) hardware telemetry like temperature/power/fans which is usually vendor-specific.
+        </div>
+
+        <h3>Good candidates (often possible without a custom driver)</h3>
+        <ul>
+            <li><b>GPU utilization:</b> overall “busy” signals may be available via OS counters / OS telemetry (availability depends on Windows version and driver model).</li>
+            <li><b>VRAM usage:</b> some systems expose dedicated/shared GPU memory usage via OS facilities; integrated GPUs complicate the interpretation.</li>
+            <li><b>Per-engine breakdown:</b> some stacks expose 3D / copy / video / compute engines. Treat this as best-effort and optional.</li>
+        </ul>
+
+        <h3>Hard candidates (often vendor SDK or privileged access)</h3>
+        <ul>
+            <li><b>GPU temperature:</b> typically not a stable, universal Windows user-mode API. Usually obtained via vendor paths.</li>
+            <li><b>GPU power (W) and board power:</b> often vendor-specific and can vary by GPU model.</li>
+            <li><b>Fan RPM:</b> exposed via vendor interfaces or a vendor service/driver; not consistently available from user mode.</li>
+        </ul>
+
+        <div class="small">
+            Practical rule: usage/memory is “OS-ish”; temperature/power/fans is “vendor-ish”.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="gpu-meaning">What GPU metrics mean (and how you can misread them)</h2>
+        <ul>
+            <li><b>GPU utilization is not “GPU speed”.</b> It’s usually “how busy an engine is” over a sampling window. A GPU can be 100% busy at a low clock (power/thermal limited) or 40% busy but delivering high FPS if the workload is CPU-bound.</li>
+            <li><b>Engines matter.</b> A video decode engine can be busy while 3D is idle (watching a video). A copy engine can be busy while compute is idle (moving data).</li>
+            <li><b>Memory bandwidth bottlenecks look weird.</b> Some workloads saturate memory bandwidth; the GPU may show high “busy” but performance scales poorly.</li>
+            <li><b>Queueing exists on GPUs too.</b> Frames and compute work are queued; by the time you see utilization rise, the cause might be earlier in the pipeline.</li>
+        </ul>
+        <div class="small">
+            A good “first glance” checklist: (1) CPU%, (2) GPU 3D/compute engine busy, (3) VRAM usage, (4) temperatures/power, (5) disk/network.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="vram">VRAM / memory model (dGPU vs iGPU)</h2>
+        <table>
+            <tr><th>Concept</th><th>What it is</th><th>Why it matters for monitoring</th></tr>
+            <tr>
+                <td><b>dGPU VRAM</b></td>
+                <td>Dedicated on-card memory (GDDR/HBM on discrete GPUs).</td>
+                <td>VRAM pressure can cause stutter and paging. “VRAM used” is often meaningful on dGPUs.</td>
+            </tr>
+            <tr>
+                <td><b>iGPU shared memory</b></td>
+                <td>Integrated GPUs borrow system RAM; there may be a small reserved chunk plus dynamic allocation.</td>
+                <td>“VRAM” can be misleading: it may look like VRAM is huge because it’s actually system RAM. Memory bandwidth contention with the CPU is common.</td>
+            </tr>
+            <tr>
+                <td><b>Resizable BAR</b></td>
+                <td>Lets the CPU map more of the GPU’s VRAM address space at once.</td>
+                <td>Can influence transfers and some workloads. It’s not a “speed setting”, it’s an address mapping capability.</td>
+            </tr>
+        </table>
+        <div class="small">
+            Practical takeaway: “VRAM used” is a great signal for dGPU gaming/graphics. For iGPU systems, also watch overall system RAM and memory bandwidth behavior.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="ai">AI acceleration (GPU, NPU, “AI chips”)</h2>
+        <div class="small">
+            “AI acceleration” is not one thing. It can run on the CPU, GPU, or a dedicated NPU. Monitoring depends on which block is actually doing the work.
+        </div>
+        <h3>Common accelerator blocks</h3>
+        <ul>
+            <li><b>GPU matrix / tensor hardware:</b> many GPUs have fast matrix-multiply units (names vary by vendor). Used for inference/training kernels and some graphics features (e.g. upscaling).</li>
+            <li><b>NPU (Neural Processing Unit):</b> a separate accelerator (common in modern laptops/SoCs). Often optimized for efficient inference at low power.</li>
+            <li><b>Dedicated AI cards / ASICs:</b> purpose-built accelerators (datacenter or specialized devices). They often require their own runtime/driver stack.</li>
+        </ul>
+
+        <h3>What to monitor (conceptually)</h3>
+        <ul>
+            <li><b>Throughput:</b> work done/sec (models/sec, tokens/sec, frames/sec). This is often the most meaningful but is workload/app-specific.</li>
+            <li><b>Device busy:</b> engine utilization (compute engine / NPU engine).</li>
+            <li><b>Memory:</b> VRAM/system RAM usage, and transfers (PCIe copy engine busy).</li>
+            <li><b>Power/thermals:</b> sustained AI workloads are often limited by power/thermals rather than raw compute.</li>
+        </ul>
+        <div class="small">
+            CCM’s likely long-term direction: show basic OS-exposed “device busy + memory” for GPU/NPU if available, and rely on an external provider for temps/power/fans.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="rt">Ray tracing (practical mental model)</h2>
+        <ul>
+            <li><b>What it is:</b> tracing rays through a 3D scene to compute lighting, reflections, shadows, and global illumination effects.</li>
+            <li><b>Acceleration structures (BVH):</b> scenes are organized into a hierarchy so “ray vs triangle” testing doesn’t become impossibly slow.</li>
+            <li><b>Hardware RT units:</b> modern GPUs often accelerate BVH traversal and intersection testing in fixed-function units.</li>
+            <li><b>Denoising:</b> real-time ray tracing uses fewer rays and then denoises; the denoiser can be a big part of the cost and may use matrix/tensor hardware.</li>
+        </ul>
+        <div class="small">
+            Monitoring implication: “3D engine busy” can go up, but RT-heavy workloads can also shift time into compute/denoise blocks and memory bandwidth.
+            A single utilization number often hides where time is actually being spent.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="amd-nv">AMD vs NVIDIA (high-level differences)</h2>
+        <div class="small">
+            This is intentionally high-level (useful for mental models, not a spec sheet).
+        </div>
+        <table>
+            <tr><th>Topic</th><th>NVIDIA (typical)</th><th>AMD (typical)</th></tr>
+            <tr>
+                <td><b>SIMT group</b></td>
+                <td>Warps (commonly 32 threads)</td>
+                <td>Wavefronts (commonly 32 or 64 threads depending on architecture/mode)</td>
+            </tr>
+            <tr>
+                <td><b>Scheduling model</b></td>
+                <td>Warp scheduling and latency hiding via many resident warps</td>
+                <td>Wave scheduling and latency hiding via many resident waves</td>
+            </tr>
+            <tr>
+                <td><b>Ray tracing</b></td>
+                <td>Dedicated RT hardware for BVH traversal/intersection</td>
+                <td>Dedicated RT hardware for traversal/intersection (implementation differs)</td>
+            </tr>
+            <tr>
+                <td><b>Matrix acceleration</b></td>
+                <td>Dedicated matrix/tensor pathways are widely used in both AI and some graphics features</td>
+                <td>Dedicated matrix pathways exist on modern parts; usage depends on software stack and workload</td>
+            </tr>
+            <tr>
+                <td><b>Monitoring/telemetry APIs</b></td>
+                <td>Often a strong vendor API story (varies by platform)</td>
+                <td>Also has vendor APIs; coverage and semantics vary</td>
+            </tr>
+        </table>
+        <div class="small">
+            The practical takeaway for CCM: don’t hard-code assumptions. Treat GPU metrics as best-effort and surface them with clear labels (engine name + units + “source”).
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="board">Motherboard monitoring (why it’s hard)</h2>
+        <ul>
+            <li><b>Fans and VRM telemetry</b> usually live behind an embedded controller (EC) and sensor chips on SMBus/I²C.</li>
+            <li>Access paths are highly motherboard-dependent; there is no universal, documented Windows user-mode API to read arbitrary board sensors.</li>
+            <li>Polling the wrong registers or at the wrong rate can cause timeouts or interfere with firmware. This is why many monitoring tools ship a driver.</li>
+        </ul>
+        <div class="small">
+            Even when vendors ship utilities, they often do so via a privileged service/driver stack. If a stable SDK exists, consuming it is usually safer than reinventing bus access.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="architecture">Recommended architecture (provider boundary)</h2>
+        <div class="small">
+            CCM already has the right long-term shape for “better sensors”: keep the UI simple and safe, and optionally consume richer telemetry from a separate provider.
+        </div>
+        <ul>
+            <li><b>CCM UI:</b> reads safe OS metrics (PDH/WMI/ETW/PowrProf) and optionally queries a local provider for additional values.</li>
+            <li><b>Provider (separate process/service):</b> talks to vendor SDKs or existing vendor services/drivers and publishes a small read-only schema to CCM.</li>
+            <li><b>Optional driver (future):</b> only if you truly need it for consistent motherboard sensors. Keep it tiny, read-only, and heavily allow-listed.</li>
+        </ul>
+        <div class="small">
+            This keeps CCM usable on any machine while allowing “better sensors” on machines that support them.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="phases">Phased roadmap</h2>
+        <table>
+            <tr><th>Phase</th><th>Deliverable</th><th>Notes</th></tr>
+            <tr>
+                <td><b>1</b></td>
+                <td>Document the schema for GPU + board readings</td>
+                <td>Define names, units, and how <span class="code">N/A</span> is represented. Keep it small and versioned.</td>
+            </tr>
+            <tr>
+                <td><b>2</b></td>
+                <td>Add UI fields that display provider values (if present)</td>
+                <td>Do not require a provider. Values should show as <span class="code">N/A (provider)</span> when absent.</td>
+            </tr>
+            <tr>
+                <td><b>3</b></td>
+                <td>Implement one user-mode provider (GPU-first)</td>
+                <td>Prefer vendor-documented SDKs or safe OS telemetry. Ship as a separate optional tool.</td>
+            </tr>
+            <tr>
+                <td><b>4</b></td>
+                <td>Motherboard sensors (only if needed)</td>
+                <td>Prefer consuming existing vendor stacks. Custom driver work is last resort and must follow the threat model.</td>
+            </tr>
+        </table>
+    </div>
+</body>
+
+</html>

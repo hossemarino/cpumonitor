@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – Troubleshooting</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Troubleshooting (N/A, 0 values, permissions)</h1>
+        <div class="small"><a href="index.html">Back to contents</a> · <a href="metrics.html">Metrics</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#na">How to read CCM’s “N/A” labels</a></li>
+            <li><a href="#temp">Temperature is N/A</a></li>
+            <li><a href="#power">Power is 0.0 / N/A</a></li>
+            <li><a href="#etw">ETW access denied / privilege not held</a></li>
+            <li><a href="#provider">External sensor provider</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            troubleshooting, N/A, permissions, access denied, admin, ETW, WMI, PDH, GPU, DXGI, WDDM, GPU Engine, GPU Adapter Memory,
+            Power Meter, temperature, fan RPM, named pipe, provider
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="na">How to read CCM’s “N/A” labels</h2>
+        <ul>
+            <li><b>N/A (WMI)</b> means the WMI class/query did not produce a reliable value on your machine.</li>
+            <li><b>N/A (no meter)</b> means PDH is working, but Windows does not expose a system power meter provider.</li>
+            <li><b>ETW: ...</b> messages are the exact reason the kernel trace could not start (privileges/policy/session conflict).</li>
+            <li><b>N/A (provider)</b> means an optional external sensor provider was not reachable or returned no value.</li>
+            <li><b>GPU graphs stuck at 0</b> can mean your system does not expose the WDDM GPU performance counters (or they’re unavailable in your current environment). CCM treats GPU as best-effort and will not fail the app.</li>
+        </ul>
+        <div class="small">
+            CCM does not “guess” missing data. If Windows doesn’t expose a safe value, CCM shows N/A and continues running.
+            Most missing readings are a platform/firmware/provider issue rather than a CCM bug.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="temp">Temp shows “N/A (WMI)”</h2>
+        <ul>
+            <li>Many PCs do not expose CPU package temperature through <span class="code">MSAcpi_ThermalZoneTemperature</span>.</li>
+            <li>Even when present, it may be a chassis/board thermal zone, not the CPU die/package temp.</li>
+            <li><b>What you can do:</b> use a separate sensor provider (service/driver/vendor SDK) and let CCM consume it (see below).</li>
+        </ul>
+        <div class="small">
+            If you need accurate CPU package temperature, use a hardware telemetry source designed for it (vendor SDK, a dedicated sensor tool, or your motherboard monitoring stack).
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="power">Pwr (W) is 0.0 or N/A</h2>
+        <ul>
+            <li>CCM reads <span class="code">\Power Meter(_Total)\Power</span> if available. On many systems it’s missing.</li>
+            <li>0.0W often means “provider exists but reports 0” (common on desktops).</li>
+            <li><b>What you can do:</b> use an external provider that reads vendor telemetry (RAPL/AMD equivalents) and reports <span class="code">powerW</span>.</li>
+        </ul>
+        <div class="small">
+            This is normal on many consumer machines: Windows power meters are not universally exposed.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="etw">ETW shows access denied / privilege not held</h2>
+        <ul>
+            <li>ETW kernel sessions may require elevation and specific privileges.</li>
+            <li>Some environments block kernel tracing by policy (enterprise hardening, security tools, anti-cheat).</li>
+            <li><b>What you can do:</b> run CCM as Administrator; if blocked by policy, ETW may remain unavailable (that’s expected).</li>
+        </ul>
+        <div class="small">See: <a href="etw_deep.html">ETW deep dive</a> for detailed reasons and examples.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="provider">Optional: external sensor provider (safe “HWMonitor-like” path)</h2>
+        <div class="small">
+            Instead of embedding a kernel driver inside CCM, you can run a separate program (service/driver-backed helper)
+            that exposes sensor readings to CCM via a local named pipe.
+        </div>
+        <ul>
+            <li>Pipe: <span class="code">\\.\pipe\ccm_sensors</span></li>
+            <li>Request: <span class="code">GET</span></li>
+            <li>Response: newline-separated <span class="code">key=value</span> lines, e.g. <span class="code">tempC=62.5</span>, <span class="code">powerW=38.2</span>, <span class="code">fanRpm=1450</span></li>
+            <li>Tip: a provider may include <span class="code">status=OK</span> even when no sensor values are available. This lets CCM treat it as a successful provider round-trip.</li>
+        </ul>
+
+        <h3>Try it with the included demo provider</h3>
+        <div class="small">This is a fake provider that returns fixed numbers (for testing the integration).</div>
+        <p>
+            Newer builds ship a bundled provider executable and CCM will try to auto-start it when no provider is running:
+        </p>
+        <pre class="code">.\CCM_sensor_provider.exe</pre>
+        <div class="small">When present next to <span class="code">CCM.exe</span>, CCM will start it on demand and it will exit when CCM exits.</div>
+        <p>
+            Alternative (manual sample provider):
+        </p>
+        <pre class="code">pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\ccm_sensor_provider_sample.ps1 -TempC 55.0 -PowerW 22.5 -FanRpm 1200</pre>
+        <div class="small">Then run CCM. If the provider is running, CCM will prefer provider values when available.</div>
+
+        <div class="small">If you build CCM from source, close CCM before rebuilding so the bundled provider EXE isn’t locked.</div>
+
+        <h3>Why this is “safer” than bundling a driver</h3>
+        <ul>
+            <li>CCM stays a normal user-mode app (no driver install, no kernel attack surface in this repo).</li>
+            <li>The provider can be swapped per machine and can be hardened/reviewed separately.</li>
+            <li>If you later decide to use a driver, it can live behind the provider boundary.</li>
+        </ul>
+        <div class="small">
+            If you’re building a real provider, prefer a strict parser on both sides and return only the minimal set of keys CCM understands.
+        </div>
+    </div>
+</body>
+
+</html>

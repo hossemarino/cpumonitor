@@ -1,0 +1,33 @@
+[OPTIONS]
+Compatibility=1.1 or later
+Compiled file=CCM.chm
+Contents file=CCM.hhc
+Index file=CCM.hhk
+Default topic=index.html
+Default Window=main
+Display compile progress=No
+Full-text search=Yes
+Language=0x409 English (United States)
+Title=CCM Help
+
+[WINDOWS]
+main="CCM Help","CCM.hhc","CCM.hhk","index.html","index.html",,,,,0x63520,220,0x104E,[40,40,1240,940],,,,,,,,0
+
+[FILES]
+index.html
+metrics.html
+memory_and_disks.html
+processes.html
+gpu_and_motherboard.html
+driver_mode_roadmap_amd.html
+driver_threat_model.html
+troubleshooting.html
+qlen.html
+isa.html
+isa_sse_avx_deep.html
+etw.html
+etw_deep.html
+cpu_nuts_and_bolts.html
+power_and_temps.html
+drivers_and_privileges.html
+styles.css

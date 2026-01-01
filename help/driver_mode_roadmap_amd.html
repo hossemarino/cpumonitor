@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Driver-mode roadmap (AMD-first)</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>Driver-mode roadmap (AMD-first)</h1>
+        <div class="small"><a href="index.html">Back to contents</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#goal">Goal and philosophy</a></li>
+            <li><a href="#interfaces">Roadmap by interface</a></li>
+            <li><a href="#phases">Phased implementation plan</a></li>
+            <li><a href="#constraints">Practical constraints</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            roadmap, AMD, driver mode, provider service, kernel driver, MSR, PCI config space, SMU, firmware telemetry, SMBus, EC, read-only, allow-list
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="goal">Goal and philosophy</h2>
+        <ul>
+            <li><b>Goal:</b> add HWMonitor/HWiNFO-style readings (temps, fans, power, VRM, etc.) while keeping CCM’s main EXE safe and driver-free by default.</li>
+            <li><b>Architecture:</b> the UI (CCM) stays user-mode; a separate <b>provider service</b> talks to an optional <b>kernel driver</b> and publishes readings over a local pipe.</li>
+            <li><b>AMD-first:</b> this page focuses on AMD systems. Intel-specific mechanisms like “RAPL MSRs” are intentionally not a priority here.</li>
+            <li><b>Read-only:</b> we do not implement writes (no fan control, no voltage changes, no BIOS/SMU writes). “Read-only” is a strict design constraint enforced by IOCTL design.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="interfaces">Roadmap by interface</h2>
+
+        <h3>1) MSR reads (kernel-mode only)</h3>
+        <div class="small">
+            <b>What MSRs are good for on AMD:</b> stable, low-risk reads like time and frequency accounting (e.g., APERF/MPERF style counters) and basic identification.
+            They are <b>not</b> the universal path to “all sensors” on AMD.
+        </div>
+        <ul>
+            <li><b>Kernel requirement:</b> reading MSRs requires a privileged instruction; user-mode cannot do this directly.</li>
+            <li><b>Driver plan:</b> implement <span class="code">IOCTL_CCM_RDMSR</span> that reads <b>only an allow-listed set</b> of MSR indices.</li>
+            <li><b>Allow-list strategy:</b> start with a tiny list we can justify (time/frequency/counters). Expand only after we can prove correctness and safety.</li>
+            <li><b>Output:</b> raw 64-bit value + timestamp + status.</li>
+        </ul>
+        <div class="small">
+            Note: “CPU package power from MSRs” is largely an Intel story. For AMD, many power/thermal readings are typically brokered by the platform controller/firmware.
+        </div>
+
+        <h3>2) PCI/PCIe configuration space reads (typically kernel-mode)</h3>
+        <div class="small">
+            PCI config reads are a common building block for talking to platform controllers (and sometimes for reaching AMD platform telemetry paths).
+            Windows does not provide a general-purpose “read arbitrary PCI config space” API for a normal user-mode app.
+        </div>
+        <ul>
+            <li><b>Kernel requirement:</b> implement config reads in the driver via a controlled mechanism.</li>
+            <li><b>Driver plan:</b> implement <span class="code">IOCTL_CCM_PCI_CFG_READ</span> with strict validation:
+                <ul>
+                    <li>Read-only; sizes 1/2/4 only; aligned offsets only.</li>
+                    <li>Reject unknown buses/devices/functions unless explicitly allow-listed.</li>
+                    <li>Reject reads outside PCI config space bounds.</li>
+                </ul>
+            </li>
+            <li><b>Service plan:</b> the provider service does discovery in user-mode (SetupAPI) and only requests reads for known-safe devices/registers.</li>
+        </ul>
+
+        <h3>3) AMD platform telemetry (SMU/firmware-mediated) (likely driver-mode)</h3>
+        <div class="small">
+            On many modern AMD systems, “the real readings” (package power, PPT/TDC/EDC style limits, some temperatures, etc.) are mediated by firmware/platform controllers.
+            Access paths are often vendor- and generation-dependent.
+        </div>
+        <ul>
+            <li><b>Reality check:</b> there is no single universal public Windows API that exposes all of this for all AMD boards.</li>
+            <li><b>Roadmap approach:</b>
+                <ul>
+                    <li>Start by plumbing: driver + service + provider schema + UI integration.</li>
+                    <li>Then add AMD-specific telemetry modules one by one, gated behind capability bits.</li>
+                    <li>Keep everything “read-only” and fail closed if the platform doesn’t match expected patterns.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>4) SMBus / I²C / EC (Embedded Controller) (driver-mode, high risk)</h3>
+        <div class="small">
+            This is where most motherboard sensors live (fans, VRM temps, multiple thermistors). It is also the most fragile and riskiest area:
+            timeouts, board-specific behavior, and the possibility of interfering with firmware.
+        </div>
+        <ul>
+            <li><b>Recommendation:</b> treat EC/SMBus as a later phase. Do not attempt this until the driver threat model, allow-lists, and rate limiting are solid.</li>
+            <li><b>Design rules:</b> read-only, conservative polling intervals, and hard timeouts.</li>
+            <li><b>Vendor systems:</b> if an OEM/vendor already ships a service/driver that exposes sensor readings via a stable public API, prefer consuming that in user-mode instead of reinventing bus access.</li>
+        </ul>
+
+        <h3>5) “Use existing vendor drivers if possible” (often user-mode, but vendor-specific)</h3>
+        <div class="small">
+            Sometimes the safest path is not a custom driver: it is to query an existing vendor stack (SDK / local service) that already has the privileged access.
+            This can be the best of both worlds if the API is stable and documented.
+        </div>
+        <ul>
+            <li><b>Good case:</b> vendor provides a documented SDK or a stable COM/WMI interface → can be used in user mode, no custom driver needed.</li>
+            <li><b>Bad case:</b> undocumented IOCTLs/reverse-engineered structures → fragile and risky; treat as experimental.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="phases">Phased implementation plan (AMD-first)</h2>
+        <table>
+            <tr>
+                <th>Phase</th>
+                <th>What we build</th>
+                <th>Why</th>
+            </tr>
+            <tr>
+                <td><b>0</b></td>
+                <td>Finalize scope + threat model + provider schema v2</td>
+                <td>Prevents building unsafe IOCTLs and unstable UI contracts.</td>
+            </tr>
+            <tr>
+                <td><b>1</b></td>
+                <td>Driver “hello”: version + capabilities + strict ACL</td>
+                <td>Hardens the skeleton before adding any hardware reads.</td>
+            </tr>
+            <tr>
+                <td><b>2</b></td>
+                <td>MSR allow-list reads (limited set)</td>
+                <td>Low-risk kernel feature; validates the end-to-end driver/service/provider flow.</td>
+            </tr>
+            <tr>
+                <td><b>3</b></td>
+                <td>PCI config read allow-list plumbing</td>
+                <td>Needed building block for AMD platform telemetry modules on many systems.</td>
+            </tr>
+            <tr>
+                <td><b>4</b></td>
+                <td>AMD telemetry modules (SMU/firmware-mediated) per platform</td>
+                <td>Add real HWMonitor-like values (power/temps) in a controlled, testable way.</td>
+            </tr>
+            <tr>
+                <td><b>5</b></td>
+                <td>EC/SMBus sensors (motherboard fans/VRM/thermistors)</td>
+                <td>Highest variance/risk; only after everything else is stable.</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 id="constraints">Practical constraints (don’t skip)</h2>
+        <ul>
+            <li><b>Vendor + motherboard variability:</b> AMD CPU model is only half the story; the motherboard and its EC/sensor chip largely determine fan/VRM telemetry.</li>
+            <li><b>Security features:</b> Secure Boot / VBS / HVCI can block or restrict kernel drivers; plan for dev/test signing vs production signing.</li>
+            <li><b>Testing requirement:</b> for driver-mode work we need real AMD test machines across at least 2–3 generations to avoid building a “works on my PC” solution.</li>
+        </ul>
+    </div>
+</body>
+
+</html>

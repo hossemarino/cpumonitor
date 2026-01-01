@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCM – CPU nuts &amp; bolts</title>
+    <link rel="stylesheet" href="styles.css" type="text/css" />
+</head>
+
+<body>
+    <header>
+        <h1>CPU nuts & bolts (how the machine really runs)</h1>
+        <div class="small"><a href="index.html">Back to contents</a></div>
+    </header>
+
+    <div class="card">
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#mental">Mental model</a></li>
+            <li><a href="#pipeline">Pipeline and out-of-order execution</a></li>
+            <li><a href="#caches">Caches and memory hierarchy</a></li>
+            <li><a href="#smt">SMT / Hyper-Threading</a></li>
+            <li><a href="#topology">Topology in Windows</a></li>
+            <li><a href="#pstates">Frequency, turbo, throttling</a></li>
+            <li><a href="#cstates">C-states</a></li>
+            <li><a href="#scheduler">Scheduler interaction</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Keywords</h2>
+        <div class="small">
+            pipeline, out-of-order, uops, caches, L1, L2, L3, DRAM, SMT, Hyper-Threading, topology, P-states, C-states, turbo, throttling, scheduler, context switches
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="mental">Mental model</h2>
+        <ul>
+            <li><b>Programs</b> run as threads. The OS scheduler chooses which runnable threads get CPU time.</li>
+            <li>A <b>core</b> runs instructions; it may expose multiple <b>logical processors</b> (SMT / Hyper-Threading).</li>
+            <li>Performance is about keeping the pipeline fed: instruction fetch/decode, execution units, caches, memory, and branch prediction.</li>
+            <li>Most of what you see in this app is “symptoms” of those systems: queueing, interrupts, context switching, throttling, and event rates.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="pipeline">Pipeline, out-of-order execution, and why “CPU%” is not the whole story</h2>
+        <ul>
+            <li>Modern x86 cores decode instructions into internal micro-ops (uops), then execute them out-of-order to hide latency.</li>
+            <li><b>Frontend limits</b>: decode width, uop cache, instruction cache misses, branch mispredicts.</li>
+            <li><b>Backend limits</b>: execution port pressure, dependency chains, cache/memory latency.</li>
+            <li>“100% CPU” can mean “fully busy doing useful work” or “spinning, stalled, or thrashing in memory.” The OS view can’t always distinguish without profiling.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="caches">Caches and memory hierarchy</h2>
+        <table>
+            <tr><th>Component</th><th>What it does</th><th>Why it matters</th></tr>
+            <tr><td class="code">L1I / L1D</td><td>Per-core instruction/data caches (tiny, fastest)</td><td>Misses quickly hit performance; small working sets are “free”.</td></tr>
+            <tr><td class="code">L2</td><td>Per-core or per-core-complex cache</td><td>Feeds L1; mid-latency.</td></tr>
+            <tr><td class="code">L3 (LLC)</td><td>Shared last-level cache</td><td>Cross-core sharing and contention happens here; misses go to DRAM.</td></tr>
+            <tr><td class="code">DRAM</td><td>Main memory</td><td>High latency. If you’re memory-bound, CPU% can be high but work/second is low.</td></tr>
+        </table>
+        <div class="small">This app shows cache sizes/topology as best-effort from Windows APIs; it doesn’t measure cache misses.</div>
+    </div>
+
+    <div class="card">
+        <h2 id="smt">SMT / Hyper-Threading (two logical CPUs share one core)</h2>
+        <ul>
+            <li>SMT exposes multiple logical processors that share most execution resources.</li>
+            <li>It helps when one thread is stalled (e.g., on cache miss) and another can use idle execution units.</li>
+            <li>It can hurt when both threads compete for the same resources (ports, caches, bandwidth).</li>
+            <li>From the OS view, each logical CPU looks schedulable, but “100% on both siblings” isn’t the same as two independent cores.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="topology">Topology in Windows: packages, cores, logical processors</h2>
+        <div class="small">
+            CCM reads topology from <span class="code">GetLogicalProcessorInformationEx</span>. This is Windows telling you
+            how it currently sees the machine:
+        </div>
+        <ul>
+            <li><b>Package</b> = CPU socket (physical processor package). Many desktops have 1 package.</li>
+            <li><b>Core</b> = physical core. A core can expose 1+ logical processors.</li>
+            <li><b>Logical processor</b> = what Task Manager calls a “logical CPU” (a schedulable hardware thread).</li>
+        </ul>
+        <div class="small">
+            Where it shows up in CCM: in the header line that contains <span class="code">packages</span>, <span class="code">cores</span>, and <span class="code">logical</span>.
+            The CPU0–CPU15 bars (when enabled) are per-<b>logical</b>-processor utilization.
+        </div>
+        <div class="small">
+            Caveat: on some systems (virtual machines, BIOS settings, hotplug environments), what Windows reports can be a simplified view.
+            That’s still useful for “what the scheduler can schedule”, which is what CCM cares about.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="pstates">Frequency, turbo, and throttling: P-states and power limits</h2>
+        <ul>
+            <li><b>P-states</b> are performance states: voltage/frequency operating points.</li>
+            <li><b>Turbo</b> raises frequency opportunistically when there is thermal and power headroom.</li>
+            <li><b>Throttling</b> happens when the platform enforces limits (temperature, VRM limits, package power limits, skin temperature, etc.).</li>
+            <li>This app’s <span class="code">Thr%</span> is a heuristic using reported MHz versus max MHz; it is not a definitive “thermal throttle” indicator.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="cstates">C-states (sleep states) and why idle can be “busy-looking”</h2>
+        <ul>
+            <li><b>C-states</b> are idle states. Deeper C-states save more power but take longer to wake.</li>
+            <li>Timer tick behavior, interrupt rates, and device activity influence whether the CPU can stay in deep idle.</li>
+            <li>On modern Windows, lots of short wakeups can reduce residency in deep C-states even if CPU usage looks low.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2 id="scheduler">How the OS scheduler interacts with hardware</h2>
+        <ul>
+            <li>Scheduling is constrained by CPU topology: cores, SMT siblings, cache sharing, and NUMA nodes.</li>
+            <li>Windows tries to balance throughput, responsiveness, and power. It may pack threads to allow other cores to idle deeply.</li>
+            <li>Frequent context switches (see <span class="code">Ctx/s</span>) can be normal (I/O heavy workloads) or a symptom of contention (too many runnable threads).</li>
+        </ul>
+        <div class="small">See also: <a href="qlen.html">Processor Queue Length (QLen)</a> and <a href="etw_deep.html">ETW deep dive</a>.</div>
+    </div>
+
+</body>
+
+</html>
